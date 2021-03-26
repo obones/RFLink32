@@ -1,0 +1,18 @@
+{
+  "nightly_releases": [
+    {
+      "name": "master",
+      "hardware": [
+        "esp32": "https://github.com/cpainchaud/RFLink/releases/download/nightly/esp32-firmware-OTA.bin",
+        "d1 mini": "https://github.com/cpainchaud/RFLink/releases/download/nightly/esp32-firmware-OTA.bin"
+      ]
+    },
+    {
+      "name": "RadioLib",
+      "hardware": [
+        "esp32": "https://github.com/cpainchaud/RFLink/releases/download/nightly-radiolib/esp32-firmware-OTA.bin",
+        "d1 mini": "https://github.com/cpainchaud/RFLink/releases/download/nightly-radiolib/esp32-firmware-OTA.bin"
+      ]
+    }
+  ]
+}
