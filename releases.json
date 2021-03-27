@@ -10,8 +10,8 @@
     {
       "name": "RadioLib",
       "hardware": {
-        "esp32": "https://github.com/cpainchaud/RFLink/releases/download/nightly-radiolib/esp32-firmware-OTA.bin",
-        "d1 mini": "https://github.com/cpainchaud/RFLink/releases/download/nightly-radiolib/esp8266-firmware.bin"
+        "esp32": "https://github.com/cpainchaud/RFLink/releases/download/nightly-RadioLib/esp32-firmware-OTA.bin",
+        "d1 mini": "https://github.com/cpainchaud/RFLink/releases/download/nightly-RadioLib/esp8266-firmware.bin"
       }
     }
   ]
