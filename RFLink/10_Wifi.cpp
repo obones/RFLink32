@@ -79,7 +79,7 @@ namespace RFLink { namespace Wifi {
 
 
         Config::ConfigItem configItems[] =  {
-                Config::ConfigItem(json_name_client_enabled,      Config::SectionId::Wifi_id, false, clientParamsUpdatedCallback),
+                Config::ConfigItem(json_name_client_enabled,      Config::SectionId::Wifi_id, true, clientParamsUpdatedCallback),
                 Config::ConfigItem(json_name_client_dhcp_enabled, Config::SectionId::Wifi_id, true, clientParamsUpdatedCallback),
                 Config::ConfigItem(json_name_client_ssid,         Config::SectionId::Wifi_id, "My Home Wifi", clientParamsUpdatedCallback),
                 Config::ConfigItem(json_name_client_password,     Config::SectionId::Wifi_id, "inputyourown", clientParamsUpdatedCallback),
@@ -89,7 +89,7 @@ namespace RFLink { namespace Wifi {
                 Config::ConfigItem(json_name_client_dns,          Config::SectionId::Wifi_id, "192.168.0.1", clientParamsUpdatedCallback),
                 Config::ConfigItem(json_name_client_hostname,     Config::SectionId::Wifi_id, DEFAULT_WIFI_CLIENT_HOSTNAME, clientParamsUpdatedCallback),
 
-                Config::ConfigItem(json_name_ap_enabled,  Config::SectionId::Wifi_id, true, accessPointParamsUpdatedCallback),
+                Config::ConfigItem(json_name_ap_enabled,  Config::SectionId::Wifi_id, false, accessPointParamsUpdatedCallback),
                 Config::ConfigItem(json_name_ap_ssid,     Config::SectionId::Wifi_id, "RFLink-AP", accessPointParamsUpdatedCallback),
                 Config::ConfigItem(json_name_ap_password, Config::SectionId::Wifi_id, "", accessPointParamsUpdatedCallback),
                 Config::ConfigItem(json_name_ap_ip,       Config::SectionId::Wifi_id, "192.168.4.1", accessPointParamsUpdatedCallback),
