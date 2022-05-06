@@ -237,6 +237,7 @@ namespace RFLink
       Toggle = true;
       RawCodeLength = 0;
       PulseLength_us = 0;
+      RawSignal.Pulses = RawSignal.RawPulses;
 
       // ***********************************
       // ***   Scan for Preamble Pulse   ***
@@ -359,6 +360,7 @@ namespace RFLink
       dynamicGapEnd_us = 0;
       RawSignal.Time = micros();
       RawSignal.endReason = EndReasons::Unknown;
+      RawSignal.Pulses = RawSignal.RawPulses;
 
       // ***********************************
       // ***   Scan for Preamble Pulse   ***
@@ -667,16 +669,63 @@ namespace RFLink
       }
 
       Serial.println("Async received a packet, processing it...");
-      counters::receivedSignalsCount++; // we have a signal, let's increment counters
+
+      /*Serial.print(RawSignal.Number);
+      Serial.print(": ");
+      for (int i = 1; i < RawSignal.Number + 1; i++)
+      {
+        Serial.print(RawSignal.Pulses[i] * RawSignal.Multiply);
+        if (i < RawSignal.Number)
+          Serial.print(',');
+      }
+      Serial.println();*/
+
+      counters::receivedSignalsCount += rtl_433Bridge::processReceivedData(); 
+
+      /*counters::receivedSignalsCount++; // we have a signal, let's increment counters
 
       byte signalWasDecoded = PluginRXCall(0, 0); // Check all plugins to see which plugin can handle the received signal.
       if (signalWasDecoded)
       { // Check all plugins to see which plugin can handle the received signal.
         counters::successfullyDecodedSignalsCount++;
         RepeatingTimer = millis() + params::signal_repeat_time;
-      }
+      }*/
+
+      bool result = false;
+      int PulsesCount = RawSignal.Number;
+      for (int i = 1; i < PulsesCount; i++) 
+        if (RawSignal.RawPulses[i] > params::signal_end_timeout)
+        {
+          RawSignal.Number = &RawSignal.RawPulses[i] - RawSignal.Pulses;
+          //Serial.printf("Breaking at pulse %d\r\n", i);
+          //Serial.printf("RawSignal.Number = %d\r\n", RawSignal.Number);
+      
+          // RF: *** data start ***
+          counters::receivedSignalsCount++;
+          if (PluginRXCall(0, 0))
+          { // Check all plugins to see which plugin can handle the received signal.
+            counters::successfullyDecodedSignalsCount++;
+            RepeatingTimer = millis() + params::signal_repeat_time;
+            //auto responseLength = strlen(pbuffer);
+            //if(responseLength>1)
+            //  sprintf(&pbuffer[responseLength-2], "RSSI=%i;\r\n", (int)RawSignal.rssi);
+            result |= true;
+            Serial.println("Found a plugin that decodes this");
+            RFLink::sendMsgFromBuffer();
+          }
+
+          RawSignal.Pulses = &RawSignal.RawPulses[i + 1];
+          /*while ((i < PulsesCount) && (RawSignal.Pulses[0] < params::min_preamble))
+          {
+            RawSignal.Pulses++;
+            i++;
+          }
+          Serial.printf("Skipped to pulse %d in look for preamble\r\n", i);*/
+        }
+
       AsyncSignalScanner::startScanning();
-      return (signalWasDecoded != 0);
+      //return (signalWasDecoded != 0);
+      return result;
     }
 
     namespace AsyncSignalScanner
@@ -684,6 +733,7 @@ namespace RFLink
       unsigned long int lastChangedState_us = 0;
       unsigned long int nextPulseTimeoutTime_us = 0;
       bool scanningStopped = true;
+      int end_timeout = 0;
 
       void enableAsyncReceiver()
       {
@@ -708,8 +758,10 @@ namespace RFLink
           RawSignal.Number = 0;
           RawSignal.Time = 0;
           RawSignal.Multiply = params::sample_rate;
+          RawSignal.Pulses = RawSignal.RawPulses;
           lastChangedState_us = 0;
           nextPulseTimeoutTime_us = 0;
+          end_timeout = 20000; //params::signal_end_timeout; 
           attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), RX_pin_changed_state, CHANGE);
           Serial.println(F("All done, waiting for interrupts"));
         }
@@ -752,12 +804,12 @@ namespace RFLink
 
           RawSignal.Time = millis(); // record when this signal started
           RawSignal.Multiply = Signal::params::sample_rate;
-          nextPulseTimeoutTime_us = changeTime_us + SIGNAL_END_TIMEOUT_US;
+          nextPulseTimeoutTime_us = changeTime_us + end_timeout;
 
           return;
         }
 
-        if (pulseLength_us > SIGNAL_END_TIMEOUT_US)
+        if (pulseLength_us > end_timeout)
         { // signal timedout but was not caught by main loop! We will do its job
           onPulseTimerTimeout();
           return;
@@ -774,7 +826,7 @@ namespace RFLink
           return;
         }
 
-        if (RawSignal.Number == 0 && pulseLength_us < SIGNAL_MIN_PREAMBLE_US)
+        if (RawSignal.Number == 0 && pulseLength_us < params::min_preamble)
         {                              // too short preamble, let's drop it
           nextPulseTimeoutTime_us = 0; // stop watching for a timeout
           RawSignal.Number = 0;
@@ -785,7 +837,7 @@ namespace RFLink
 
         //Serial.print("found pulse #");Serial.println(RawSignal.Number);
         RawSignal.Pulses[RawSignal.Number] = pulseLength_us / Signal::params::sample_rate;
-        nextPulseTimeoutTime_us = changeTime_us + SIGNAL_END_TIMEOUT_US;
+        nextPulseTimeoutTime_us = changeTime_us + end_timeout;
       }
 
       void onPulseTimerTimeout()
@@ -814,7 +866,7 @@ namespace RFLink
           return;
         }
 
-        if (RawSignal.Number < MIN_RAW_PULSES)
+        if (RawSignal.Number < params::min_raw_pulses)
         { // not enough pulses, we ignore it
           Serial.print("found one packet, but not enough pulses. Pulses = ");Serial.println(RawSignal.Number);
           nextPulseTimeoutTime_us = 0;
@@ -827,7 +879,7 @@ namespace RFLink
         stopScanning();
         nextPulseTimeoutTime_us = 0;
         RawSignal.Number++;
-        RawSignal.Pulses[RawSignal.Number] = SIGNAL_END_TIMEOUT_US / Signal::params::sample_rate;
+        RawSignal.Pulses[RawSignal.Number] = end_timeout / Signal::params::sample_rate;
         Serial.print("found one packet, marking now for decoding. Pulses = ");Serial.println(RawSignal.Number);
         RawSignal.readyForDecoder = true;
       }
