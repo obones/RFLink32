@@ -20,6 +20,7 @@ Module radioLibModule(5, -1, 4, -1);
 SX1278 *radio_SX1278 = nullptr;
 SX1276 *radio_SX1276 = nullptr;
 RF69 *radio_RFM69 = nullptr;
+CC1101 *radio_CC1101 = nullptr;
 
 
 enum RssiThresholdTypesEnum {
@@ -87,6 +88,7 @@ namespace RFLink { namespace Radio  {
             "RFM69HCW",
             "SX1278",
             "SX1276",
+            "CC1101",
             "EOF" // this is always the last one and matches index HardareType::HW_EOF_t
     };
 #define hardwareNames_count sizeof(hardwareNames)/sizeof(char *)
@@ -339,7 +341,7 @@ namespace RFLink { namespace Radio  {
       }
       else {
         value = item->getLongIntValue();
-        if (value < 0 || value > 500000 ) {
+        if (value < 0 || value > 812000 ) {
           Serial.println(F("Invalid rxBandwidth provided, resetting to default value"));
           if(item->canBeNull) {
             item->deleteJsonRecord();
@@ -415,7 +417,9 @@ namespace RFLink { namespace Radio  {
         case HardwareType::HW_SX1276_t:
           radio_SX1276->setFrequency(newFrequency / 1000000.0);
           break;
-
+        case HardwareType::HW_CC1101_t:
+          radio_CC1101->setFrequency(newFrequency / 1000000.0);
+          break;
         default:
           return 0;  // other hardware cannot change its frequency
       }
@@ -551,6 +555,8 @@ namespace RFLink { namespace Radio  {
         set_Radio_mode_SX1278(new_State, force);
       else if( hardware == HardwareType::HW_SX1276_t )
         set_Radio_mode_SX1276(new_State, force);
+      else if( hardware == HardwareType::HW_CC1101_t )
+        set_Radio_mode_CC1101(new_State, force);
       else
         Serial.printf_P(PSTR("Error while trying to switch Radio state: unknown hardware id '%i'\r\n"), new_State);
     }
@@ -827,6 +833,182 @@ namespace RFLink { namespace Radio  {
       }
     }
 
+    void set_Radio_mode_CC1101(States new_State, bool force)
+    {
+      /*pinMode(pins::RX_DATA, INPUT);
+      pinMode(pins::RX_NA, INPUT);
+      ::attachInterrupt(digitalPinToInterrupt(pins::RX_NA), &Signal::carrierSenseISR, CHANGE);
+      ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &Signal::dataISR, CHANGE);
+
+      Serial.printf("CC1101_MDMCFG1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG1));
+      Serial.printf("CC1101_MDMCFG2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG2));
+      Serial.printf("CC1101_MDMCFG3: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG3));
+      Serial.printf("CC1101_MDMCFG4: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG4));
+      Serial.printf("CC1101_DEVIATN: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_DEVIATN));
+      Serial.printf("CC1101_AGCCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL0));
+      Serial.printf("CC1101_AGCCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL1));
+      Serial.printf("CC1101_AGCCTRL2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL2));
+      Serial.printf("CC1101_IOCFG0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG0));
+      Serial.printf("CC1101_IOCFG1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG1));
+      Serial.printf("CC1101_IOCFG2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG2));
+      Serial.printf("CC1101_FIFOTHR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FIFOTHR));
+      Serial.printf("CC1101_SYNC0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_SYNC0));
+      Serial.printf("CC1101_SYNC1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_SYNC1));
+
+      Serial.printf("CC1101_PKTLEN: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTLEN));
+      Serial.printf("CC1101_PKTCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTCTRL0));
+      Serial.printf("CC1101_PKTCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTCTRL1));
+      Serial.printf("CC1101_ADDR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_ADDR));
+      Serial.printf("CC1101_CHANNR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_CHANNR));
+      Serial.printf("CC1101_FSCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCTRL0));
+      Serial.printf("CC1101_FSCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCTRL1));
+      Serial.printf("CC1101_FREQ0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ0));
+      Serial.printf("CC1101_FREQ1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ1));
+      Serial.printf("CC1101_FREQ2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ2));
+      Serial.printf("CC1101_MCSM0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM0));
+      Serial.printf("CC1101_MCSM1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM1));
+      Serial.printf("CC1101_MCSM2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM2));
+      Serial.printf("CC1101_FOCCFG: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FOCCFG));
+
+      Serial.printf("CC1101_BSCFG: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_BSCFG));
+      Serial.printf("CC1101_WOREVT0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WOREVT0));
+      Serial.printf("CC1101_WOREVT1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WOREVT1));
+      Serial.printf("CC1101_WORCTRL: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WORCTRL));
+      Serial.printf("CC1101_FREND0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREND0));
+      Serial.printf("CC1101_FREND1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREND1));
+      Serial.printf("CC1101_FSCAL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL0));
+      Serial.printf("CC1101_FSCAL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL1));
+      Serial.printf("CC1101_FSCAL2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL2));
+      Serial.printf("CC1101_FSCAL3: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL3));
+      Serial.printf("CC1101_RCCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_RCCTRL0));
+      Serial.printf("CC1101_RCCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_RCCTRL1));
+
+      return;*/
+
+      // @TODO : review compatibility with ASYNC mode
+      if (current_State != new_State || force)
+      {
+        switch (new_State)
+        {
+          case Radio_OFF: {
+            ::detachInterrupt(digitalPinToInterrupt(pins::RX_NA));
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::stopScanning();
+
+            auto success = radio_CC1101->standby();
+            if(success != 0 ){
+              Serial.printf_P(PSTR("Failed to switch to standby mode (code=%i), we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+            break;
+          }
+
+          case Radio_RX: {
+
+            auto success = radio_CC1101->receiveDirectAsync();
+            /*auto success = radio_CC1101->receiveDirect();
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_PKTCTRL0, CC1101_PKT_FORMAT_ASYNCHRONOUS, 5, 4);
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_IOCFG0, CC1101_GDOX_SERIAL_DATA_ASYNC , 5, 0);
+            success |= radio_CC1101->setPacketMode(CC1101_LENGTH_CONFIG_INFINITE, 0);*/
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("ERROR: CC1101 receiveDirect()=%i, we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+
+            /*success = radio_CC1101->disableContinuousModeBitSync();
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("ERROR: CC1101 disableContinuousModeBitSync()=%i, we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }*/
+
+            pinMode(pins::RX_DATA, INPUT);
+
+            pinMode(pins::RX_NA, INPUT);
+            //radio_CC1101->setGdo2Action(&carrierSenseISR, RISING);
+            ::attachInterrupt(digitalPinToInterrupt(pins::RX_NA), &Signal::carrierSenseISR, CHANGE);
+            ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &Signal::dataISR, CHANGE);
+            //Signal::AsyncSignalScanner::enableAsyncReceiver();
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::startScanning();
+
+        // https://github.com/flipperdevices/flipperzero-firmware/blob/7d022c6fda24ef10a5606c00c73b82297b2af8b5/firmware/targets/f7/furi_hal/furi_hal_subghz.c#L119              
+
+      Serial.printf("CC1101_MDMCFG0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG0));
+      Serial.printf("CC1101_MDMCFG1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG1));
+      Serial.printf("CC1101_MDMCFG2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG2));
+      Serial.printf("CC1101_MDMCFG3: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG3));
+      Serial.printf("CC1101_MDMCFG4: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MDMCFG4));
+      Serial.printf("CC1101_DEVIATN: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_DEVIATN));
+      Serial.printf("CC1101_AGCCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL0));
+      Serial.printf("CC1101_AGCCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL1));
+      Serial.printf("CC1101_AGCCTRL2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_AGCCTRL2));
+      Serial.printf("CC1101_IOCFG0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG0));
+      Serial.printf("CC1101_IOCFG1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG1));
+      Serial.printf("CC1101_IOCFG2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_IOCFG2));
+      Serial.printf("CC1101_FIFOTHR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FIFOTHR));
+      Serial.printf("CC1101_SYNC0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_SYNC0));
+      Serial.printf("CC1101_SYNC1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_SYNC1));
+
+      Serial.printf("CC1101_PKTLEN: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTLEN));
+      Serial.printf("CC1101_PKTCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTCTRL0));
+      Serial.printf("CC1101_PKTCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_PKTCTRL1));
+      Serial.printf("CC1101_ADDR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_ADDR));
+      Serial.printf("CC1101_CHANNR: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_CHANNR));
+      Serial.printf("CC1101_FSCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCTRL0));
+      Serial.printf("CC1101_FSCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCTRL1));
+      Serial.printf("CC1101_FREQ0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ0));
+      Serial.printf("CC1101_FREQ1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ1));
+      Serial.printf("CC1101_FREQ2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREQ2));
+      Serial.printf("CC1101_MCSM0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM0));
+      Serial.printf("CC1101_MCSM1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM1));
+      Serial.printf("CC1101_MCSM2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_MCSM2));
+      Serial.printf("CC1101_FOCCFG: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FOCCFG));
+
+      Serial.printf("CC1101_BSCFG: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_BSCFG));
+      Serial.printf("CC1101_WOREVT0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WOREVT0));
+      Serial.printf("CC1101_WOREVT1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WOREVT1));
+      Serial.printf("CC1101_WORCTRL: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_WORCTRL));
+      Serial.printf("CC1101_FREND0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREND0));
+      Serial.printf("CC1101_FREND1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FREND1));
+      Serial.printf("CC1101_FSCAL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL0));
+      Serial.printf("CC1101_FSCAL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL1));
+      Serial.printf("CC1101_FSCAL2: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL2));
+      Serial.printf("CC1101_FSCAL3: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_FSCAL3));
+      Serial.printf("CC1101_RCCTRL0: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_RCCTRL0));
+      Serial.printf("CC1101_RCCTRL1: 0x%.2x\r\n", radio_CC1101->SPIgetRegValue(CC1101_RCCTRL1));
+
+            break;
+          }
+
+          case Radio_TX: {
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::stopScanning();
+
+            pinMode(pins::TX_DATA, OUTPUT);
+
+            auto success = radio_CC1101->transmitDirectAsync();
+            /*auto success = radio_CC1101->transmitDirect();
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_PKTCTRL0, CC1101_PKT_FORMAT_ASYNCHRONOUS, 5, 4);
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_IOCFG0, CC1101_GDOX_SERIAL_DATA_ASYNC , 5, 0);
+            success |= radio_CC1101->setPacketMode(CC1101_LENGTH_CONFIG_INFINITE, 0);*/
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("Failed to switch to TX mode (code=%i), we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+
+            break;
+          }
+
+          case Radio_NA:
+            break;
+        }
+        current_State = new_State;
+      }
+    }
+
 
     float getCurrentRssi() {
       if(hardware == HardwareType::HW_SX1278_t)
@@ -835,6 +1017,8 @@ namespace RFLink { namespace Radio  {
         return radio_SX1276->getRSSI(true);
       if(hardware == HardwareType::HW_RFM69CW_t || hardware == HardwareType::HW_RFM69HCW_t)
         return radio_RFM69->getRSSI();
+      if(hardware == HardwareType::HW_CC1101_t)
+        return radio_CC1101->getRSSI();
 
       return -9999.0F;
     }
@@ -868,6 +1052,9 @@ namespace RFLink { namespace Radio  {
       }
       else if(newHardware == HardwareType::HW_RFM69CW_t || newHardware == HardwareType::HW_RFM69HCW_t){
         success = initialize_RFM69();
+      }
+      else if(newHardware == HardwareType::HW_CC1101_t){
+        success = initialize_CC1101();
       }
       else if(newHardware == HardwareType::HW_basic_t){
         success = true;
@@ -1094,6 +1281,124 @@ namespace RFLink { namespace Radio  {
       result = radio_RFM69->setLnaTestBoost(true);
       Serial.printf_P(PSTR("RFM69 setLnaTestBoost()=%i\r\n"), result);
       finalResult |= result;
+
+      return finalResult == 0;
+    }
+
+    bool initialize_CC1101() {
+
+      /*ELECHOUSE_cc1101.Init();
+      ELECHOUSE_cc1101.SpiWriteReg(CC1101_IOCFG0, 0x0D);   // Enable data for GDO0
+      ELECHOUSE_cc1101.SpiWriteReg(CC1101_IOCFG2, 0x0E);   // Enable carrier sense for GDO2
+      ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL1, 0x10); // Carrier sense relative +6db
+      ELECHOUSE_cc1101.setModulation(CC1101_2FSK);
+      ELECHOUSE_cc1101.SetRx(868.0);
+
+      return true;*/
+
+      radioLibModule = Module(pins::RX_CS, -1, pins::RX_RESET, pins::RX_NA);
+      if(radio_CC1101 == nullptr)
+        radio_CC1101 = new CC1101(&radioLibModule);
+      else
+        *radio_CC1101 = &radioLibModule;
+
+      int finalResult = 0;
+
+      params::bitrate = 4800;
+      params::rxBandwidth = 270833;
+      params::frequency = 868200000;
+
+      auto result = radio_CC1101->begin( (float)params::frequency/1000000,
+                                            (float)params::bitrate/1000,
+                                            50.0F,
+                                            (float)params::rxBandwidth/1000,
+                                            7, 16);
+      Serial.printf_P(PSTR("Initialized CC1101(freq=%.2fMhz,br=%.3fkbps,rxbw=%.1fkhz)=%i\r\n"),
+                      (float)params::frequency/1000000,
+                      (float)params::bitrate/1000,
+                      (float)params::rxBandwidth/1000,
+                      result);
+      finalResult |= result;
+
+      result = radio_CC1101->setOOK(false);
+      Serial.printf_P(PSTR("CC1101 SetOOK(false)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->setPromiscuousMode(true);
+      Serial.printf_P(PSTR("CC1101 setPromiscuousMode(true)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->setFrequencyDeviation(2.4); //110.0);
+      Serial.printf_P(PSTR("CC1101 setFrequencyDeviation(10.0)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->disableSyncWordFiltering(true);
+      Serial.printf_P(PSTR("CC1101 disableSyncWordFiltering(true)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, 0b00001000, 3, 0);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 CARRIER_SENSE_ABS_THR=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_14_DB, 5, 4);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_OFF=%i\r\n"), result);
+      finalResult |= result;
+
+      // from FlipperZero
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_MDMCFG0, 0, 7, 0);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_MDMCFG0 0=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(CC1101_FSCTRL1, 0x06, 7, 0);
+      Serial.printf_P(PSTR("CC1101 CC1101_FSCTRL1 0x06=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(CC1101_MCSM0, 0x18, 7, 0);
+      Serial.printf_P(PSTR("CC1101 CC1101_MCSM0 0x18=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(CC1101_FOCCFG, 0x16, 7, 0);
+      Serial.printf_P(PSTR("CC1101 CC1101_FOCCFG 0x16=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(CC1101_WORCTRL, 0xfb, 7, 0);
+      Serial.printf_P(PSTR("CC1101 CC1101_WORCTRL 0xfb=%i\r\n"), result);
+      finalResult |= result;
+
+      //result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL2, RADIOLIB_CC1101_MAX_DVGA_GAIN_3 | RADIOLIB_CC1101_LNA_GAIN_REDUCE_17_1_DB | RADIOLIB_CC1101_MAGN_TARGET_42_DB, 7, 0);
+      //Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL2 Gain values=%i\r\n"), result);
+      //finalResult |= result;
+
+/*      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, 0b00001000, 3, 0);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 CARRIER_SENSE_ABS_THR=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_14_DB, 5, 4);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_14_DB=%i\r\n"), result);
+      finalResult |= result;*/
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_IOCFG2, RADIOLIB_CC1101_GDOX_CARRIER_SENSE);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_IOCFG2 RADIOLIB_CC1101_GDOX_CARRIER_SENSE=%i\r\n"), result);
+      finalResult |= result;
+
+      /*result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_FOCCFG, RADIOLIB_CC1101_FOC_BS_CS_GATE_ON, 5, 5);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_FOCCFG RADIOLIB_CC1101_FOC_BS_CS_GATE_ON=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_FOCCFG, RADIOLIB_CC1101_FOC_LIMIT_BW_CHAN_2, 1, 0);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_FOCCFG RADIOLIB_CC1101_FOC_LIMIT_BW_CHAN_2=%i\r\n"), result);
+      finalResult |= result;*/
+
+
+      //radio_CC1101->setGdo2Action(&carrierSenseISR, RISING);
+
+      /*result = radio_CC1101->setDataShaping(RADIOLIB_SHAPING_NONE);
+      Serial.printf_P(PSTR("CC1101 setDataShapingOOK()=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->setEncoding(RADIOLIB_ENCODING_NRZ);
+      Serial.printf_P(PSTR("CC1101 setEncoding()=%i\r\n"), result);
+      finalResult |= result;*/
 
       return finalResult == 0;
     }

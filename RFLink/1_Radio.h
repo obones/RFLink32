@@ -76,6 +76,7 @@ namespace RFLink { namespace Radio {
         HW_RFM69HCW_t,
         HW_SX1278_t,
         HW_SX1276_t,
+        HW_CC1101_t,
         HW_EOF_t,
     };
     #ifndef RFLink_default_Radio_HardwareType
@@ -146,6 +147,10 @@ namespace RFLink { namespace Radio {
      * don't use directly unless you know what you are doing.
      * */
     void set_Radio_mode_SX1276(States new_state, bool force=false);
+    /**
+     * don't use directly unless you know what you are doing.
+     * */
+    void set_Radio_mode_CC1101(States new_state, bool force=false);
     
     /**
      * don't use directly unless you know what you are doing.
@@ -175,7 +180,7 @@ namespace RFLink { namespace Radio {
     bool initialize_SX1278();
     bool initialize_SX1276();
     bool initialize_RFM69();
-
+    bool initialize_CC1101();
 }}
 
 
