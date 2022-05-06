@@ -858,7 +858,7 @@ namespace RFLink
         nextPulseTimeoutTime_us = changeTime_us + end_timeout;
       }
 
-      void onPulseTimerTimeout()
+      void IRAM_ATTR onPulseTimerTimeout()
       {
         if (RawSignal.readyForDecoder)
         { // it means previous packet has not been decoded yet, let's forget about it
