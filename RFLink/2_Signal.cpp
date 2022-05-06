@@ -856,6 +856,71 @@ namespace RFLink
         return false;
       }
 
+      if (!receiving && num_pulses > 0)
+      {
+        Serial.println();
+        //Serial.printf("%d pulses\r\n", num_pulses);
+        RawSignal.Number = 0;
+        RawSignal.Pulses = RawSignal.RawPulses;
+        RawSignal.Multiply = params::sample_rate;
+
+        RawSignal.Pulses[RawSignal.Number++] = 0;
+        for(int i = 0; i < num_pulses; ++i)
+        {
+          //Serial.printf("%d %d\r\n", pulses[i], gaps[i]);
+          if (RawSignal.Number < RAW_BUFFER_SIZE)
+            RawSignal.Pulses[RawSignal.Number++] = pulses[i] / params::sample_rate;
+          if (RawSignal.Number < RAW_BUFFER_SIZE)
+            RawSignal.Pulses[RawSignal.Number++] = gaps[i] / params::sample_rate;
+        }
+
+        /*
+        //---------------
+        RawSignal.Number = 0;
+        //RawSignal.Pulses[RawSignal.Number++] = 0;
+        RawSignal.Pulses[RawSignal.Number++] = 10;
+        RawSignal.Pulses[RawSignal.Number++] = 524; RawSignal.Pulses[RawSignal.Number++] = 93;
+        RawSignal.Pulses[RawSignal.Number++] = 114; RawSignal.Pulses[RawSignal.Number++] = 100;
+        RawSignal.Pulses[RawSignal.Number++] = 106; RawSignal.Pulses[RawSignal.Number++] = 102;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 104;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 105;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 103;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 103;
+        RawSignal.Pulses[RawSignal.Number++] = 106; RawSignal.Pulses[RawSignal.Number++] = 105;
+        RawSignal.Pulses[RawSignal.Number++] = 102; RawSignal.Pulses[RawSignal.Number++] = 106;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 313;
+        RawSignal.Pulses[RawSignal.Number++] = 102; RawSignal.Pulses[RawSignal.Number++] = 106;
+        RawSignal.Pulses[RawSignal.Number++] = 211; RawSignal.Pulses[RawSignal.Number++] = 102;
+        RawSignal.Pulses[RawSignal.Number++] = 314; RawSignal.Pulses[RawSignal.Number++] = 106;
+        RawSignal.Pulses[RawSignal.Number++] = 102; RawSignal.Pulses[RawSignal.Number++] = 105;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 207;
+        RawSignal.Pulses[RawSignal.Number++] = 106; RawSignal.Pulses[RawSignal.Number++] = 208;
+        RawSignal.Pulses[RawSignal.Number++] = 315; RawSignal.Pulses[RawSignal.Number++] = 206;
+        RawSignal.Pulses[RawSignal.Number++] = 209; RawSignal.Pulses[RawSignal.Number++] = 314;
+        RawSignal.Pulses[RawSignal.Number++] = 209; RawSignal.Pulses[RawSignal.Number++] = 730;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 419;
+        RawSignal.Pulses[RawSignal.Number++] = 206; RawSignal.Pulses[RawSignal.Number++] = 106;
+        RawSignal.Pulses[RawSignal.Number++] = 211; RawSignal.Pulses[RawSignal.Number++] = 205;
+        RawSignal.Pulses[RawSignal.Number++] = 105; RawSignal.Pulses[RawSignal.Number++] = 105;
+        RawSignal.Pulses[RawSignal.Number++] = 107; RawSignal.Pulses[RawSignal.Number++] = 205;
+        RawSignal.Pulses[RawSignal.Number++] = 100; RawSignal.Pulses[RawSignal.Number++] = 16;
+        //---------------*/
+
+        RawSignal.Pulses[RawSignal.Number] = 20000 / Signal::params::sample_rate;
+        if (RawSignal.Number > 3)
+        {
+          //Serial.print("found one packet, marking now for decoding. Pulses = ");Serial.println(RawSignal.Number);
+          RawSignal.readyForDecoder = true;
+
+          counters::receivedSignalsCount += rtl_433Bridge::processReceivedData(); 
+        }
+
+        // processed, discard pulses
+        num_pulses = 0;
+      }
+
+      return false;
+
       // here we are in ASYNC mode
 
       if (!RawSignal.readyForDecoder)
@@ -958,6 +1023,8 @@ namespace RFLink
 
       void startScanning()
       {
+        return;
+
         if (params::async_mode_enabled)
         {
           scanningStopped = false;
