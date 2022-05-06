@@ -21,6 +21,7 @@ Module radioLibModule(5, -1, 4, -1);
 SX1278 *radio_SX1278 = nullptr;
 SX1276 *radio_SX1276 = nullptr;
 RF69 *radio_RFM69 = nullptr;
+CC1101 *radio_CC1101 = nullptr;
 #endif
 
 #define setPinMode(pin, mode) if (pin != -1) pinMode(pin, mode)
@@ -96,6 +97,7 @@ namespace RFLink { namespace Radio  {
             "RFM69HCW",
             "SX1278",
             "SX1276",
+            "CC1101",
             #endif
             "EOF" // this is always the last one and matches index HardareType::HW_EOF_t
     };
@@ -357,7 +359,7 @@ namespace RFLink { namespace Radio  {
       }
       else {
         value = item->getLongIntValue();
-        if (value < 0 || value > 500000 ) {
+        if (value < 0 || value > 812000 ) {
           Serial.println(F("Invalid rxBandwidth provided, resetting to default value"));
           if(item->canBeNull) {
             item->deleteJsonRecord();
@@ -435,6 +437,9 @@ namespace RFLink { namespace Radio  {
           break;
         case HardwareType::HW_SX1276_t:
           radio_SX1276->setFrequency(newFrequency / 1000000.0);
+          break;
+        case HardwareType::HW_CC1101_t:
+          radio_CC1101->setFrequency(newFrequency / 1000000.0);
           break;
         #endif
 
@@ -575,6 +580,8 @@ namespace RFLink { namespace Radio  {
         set_Radio_mode_SX1278(new_State, force);
       else if( hardware == HardwareType::HW_SX1276_t )
         set_Radio_mode_SX1276(new_State, force);
+      else if( hardware == HardwareType::HW_CC1101_t )
+        set_Radio_mode_CC1101(new_State, force);
       #endif // RFLINK_NO_RADIOLIB_SUPPORT
       else
         Serial.printf_P(PSTR("Error while trying to switch Radio state: unknown hardware id '%i'\r\n"), new_State);
@@ -852,6 +859,84 @@ namespace RFLink { namespace Radio  {
         current_State = new_State;
       }
     }
+
+    void set_Radio_mode_CC1101(States new_State, bool force)
+    {
+      // @TODO : review compatibility with ASYNC mode
+      if (current_State != new_State || force)
+      {
+        switch (new_State)
+        {
+          case Radio_OFF: {
+            ::detachInterrupt(digitalPinToInterrupt(pins::RX_NA));
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::stopScanning();
+
+            auto success = radio_CC1101->standby();
+            if(success != 0 ){
+              Serial.printf_P(PSTR("Failed to switch to standby mode (code=%i), we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+            break;
+          }
+
+          case Radio_RX: {
+
+            auto success = radio_CC1101->receiveDirectAsync();
+            /*auto success = radio_CC1101->receiveDirect();
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_PKTCTRL0, CC1101_PKT_FORMAT_ASYNCHRONOUS, 5, 4);
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_IOCFG0, CC1101_GDOX_SERIAL_DATA_ASYNC , 5, 0);
+            success |= radio_CC1101->setPacketMode(CC1101_LENGTH_CONFIG_INFINITE, 0);*/
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("ERROR: CC1101 receiveDirect()=%i, we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+
+            /*success = radio_CC1101->disableContinuousModeBitSync();
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("ERROR: CC1101 disableContinuousModeBitSync()=%i, we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }*/
+
+            pinMode(pins::RX_DATA, INPUT);
+
+            pinMode(pins::RX_NA, INPUT);
+            //radio_CC1101->setGdo2Action(&carrierSenseISR, RISING);
+            ::attachInterrupt(digitalPinToInterrupt(pins::RX_NA), &Signal::carrierSenseISR, CHANGE);
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::startScanning();
+
+            break;
+          }
+
+          case Radio_TX: {
+
+            if( RFLink::Signal::params::async_mode_enabled )
+              RFLink::Signal::AsyncSignalScanner::stopScanning();
+
+            pinMode(pins::TX_DATA, OUTPUT);
+
+            auto success = radio_CC1101->transmitDirectAsync();
+            /*auto success = radio_CC1101->transmitDirect();
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_PKTCTRL0, CC1101_PKT_FORMAT_ASYNCHRONOUS, 5, 4);
+            success |= radio_CC1101->SPIsetRegValue(CC1101_REG_IOCFG0, CC1101_GDOX_SERIAL_DATA_ASYNC , 5, 0);
+            success |= radio_CC1101->setPacketMode(CC1101_LENGTH_CONFIG_INFINITE, 0);*/
+            if(success != 0 ) {
+              Serial.printf_P(PSTR("Failed to switch to TX mode (code=%i), we will try to reinitialize it later\r\n"), (int) success);
+              hardwareProperlyInitialized = false;
+            }
+
+            break;
+          }
+
+          case Radio_NA:
+            break;
+        }
+        current_State = new_State;
+      }
+    }
     #endif // RFLINK_NO_RADIOLIB_SUPPORT
 
 
@@ -863,6 +948,8 @@ namespace RFLink { namespace Radio  {
         return radio_SX1276->getRSSI(true);
       if(hardware == HardwareType::HW_RFM69CW_t || hardware == HardwareType::HW_RFM69HCW_t)
         return radio_RFM69->getRSSI();
+      if(hardware == HardwareType::HW_CC1101_t)
+        return radio_CC1101->getRSSI();
       #endif
 
       return -9999.0F;
@@ -901,6 +988,9 @@ namespace RFLink { namespace Radio  {
       }
       else if(newHardware == HardwareType::HW_RFM69CW_t || newHardware == HardwareType::HW_RFM69HCW_t){
         success = initialize_RFM69();
+      }
+      else if(newHardware == HardwareType::HW_CC1101_t){
+        success = initialize_CC1101();
       }
       #endif
       else {
@@ -1147,6 +1237,66 @@ namespace RFLink { namespace Radio  {
       radio_RFM69->writeRegister(0x3C, 0x0F);*/
 
 //      radio_RFM69->dumpAllRegs();
+
+      return finalResult == 0;
+    }
+
+    bool initialize_CC1101() {
+
+      radioLibModule = Module(pins::RX_CS, -1, pins::RX_RESET, pins::RX_NA);
+      if(radio_CC1101 == nullptr)
+        radio_CC1101 = new CC1101(&radioLibModule);
+      else
+        *radio_CC1101 = &radioLibModule;
+
+      int finalResult = 0;
+
+      auto result = radio_CC1101->begin( (float)params::frequency/1000000,
+                                            (float)params::bitrate/1000,
+                                            50.0F,
+                                            (float)params::rxBandwidth/1000,
+                                            7, 16);
+      Serial.printf_P(PSTR("Initialized CC1101(freq=%.2fMhz,br=%.3fkbps,rxbw=%.1fkhz)=%i\r\n"),
+                      (float)params::frequency/1000000,
+                      (float)params::bitrate/1000,
+                      (float)params::rxBandwidth/1000,
+                      result);
+      finalResult |= result;
+
+      result = radio_CC1101->setOOK(true);
+      Serial.printf_P(PSTR("CC1101 SetOOK(true)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->setPromiscuousMode(true);
+      Serial.printf_P(PSTR("CC1101 setPromiscuousMode(true)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->disableSyncWordFiltering(true);
+      Serial.printf_P(PSTR("CC1101 disableSyncWordFiltering(true)=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, 0b00001000, 3, 0);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 CARRIER_SENSE_ABS_THR=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL1, RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_14_DB, 5, 4);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_AGCCTRL1 RADIOLIB_CC1101_CARRIER_SENSE_REL_THR_6_DB=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->SPIsetRegValue(RADIOLIB_CC1101_REG_IOCFG2, RADIOLIB_CC1101_GDOX_CARRIER_SENSE);
+      Serial.printf_P(PSTR("CC1101 RADIOLIB_CC1101_REG_IOCFG2 RADIOLIB_CC1101_GDOX_CARRIER_SENSE=%i\r\n"), result);
+      finalResult |= result;
+
+      //radio_CC1101->setGdo0Action(&carrierSenseISR, RISING);
+      //::attachInterrupt(digitalPinToInterrupt(pins::RX_DATA), carrierSenseISR, CHANGE);
+
+      /*result = radio_CC1101->setDataShaping(RADIOLIB_SHAPING_NONE);
+      Serial.printf_P(PSTR("CC1101 setDataShapingOOK()=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_CC1101->setEncoding(RADIOLIB_ENCODING_NRZ);
+      Serial.printf_P(PSTR("CC1101 setEncoding()=%i\r\n"), result);
+      finalResult |= result;*/
 
       return finalResult == 0;
     }
