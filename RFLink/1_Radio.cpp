@@ -1127,6 +1127,27 @@ namespace RFLink { namespace Radio  {
       Serial.printf_P(PSTR("RFM69 setLnaTestBoost()=%i\r\n"), result);
       finalResult |= result;
 
+/*      radio_RFM69->writeRegister(0x02, 0x68);
+      radio_RFM69->writeRegister(0x05, 0x00);
+      radio_RFM69->writeRegister(0x06, 0x52);
+      radio_RFM69->writeRegister(0x0B, 0x00);
+      radio_RFM69->writeRegister(0x11, 0x9F);
+      radio_RFM69->writeRegister(0x18, 0x88);
+      radio_RFM69->writeRegister(0x1A, 0x20);
+      radio_RFM69->writeRegister(0x1B, 0x43);
+      radio_RFM69->writeRegister(0x1E, 0x18);*/
+//      radio_RFM69->writeRegister(0x29, 0xA0);
+/*      radio_RFM69->writeRegister(0x2A, 0x00);
+      radio_RFM69->writeRegister(0x2B, 0x00);
+      radio_RFM69->writeRegister(0x2D, 0x03);
+      radio_RFM69->writeRegister(0x2E, 0x98);
+      radio_RFM69->writeRegister(0x2F, 0x00);
+      radio_RFM69->writeRegister(0x30, 0x00);
+      radio_RFM69->writeRegister(0x37, 0x10);
+      radio_RFM69->writeRegister(0x3C, 0x0F);*/
+
+//      radio_RFM69->dumpAllRegs();
+
       return finalResult == 0;
     }
     #endif // RFLINK_NO_RADIOLIB_SUPPORT
