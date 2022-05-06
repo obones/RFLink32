@@ -230,7 +230,7 @@ namespace RFLink
 
         int processReceivedData()
         {
-            //Serial.println("rtl_433 trying to process messages");
+            Serial.println("rtl_433 trying to process messages");
             /*for (int deviceIndex = 0; deviceIndex < num_r_devices; deviceIndex++)
               Serial.println(r_devices[deviceIndex].name);*/
 
@@ -240,6 +240,7 @@ namespace RFLink
             for (int pulseIndex = 0; pulseIndex < Signal::RawSignal.Number; pulseIndex++)
             {
                 int pulseDuration = Signal::RawSignal.Pulses[pulseIndex] * Signal::RawSignal.Multiply;
+                //Serial.printf("pulses[%d] = %d * %d\n", pulseIndex, Signal::RawSignal.Pulses[pulseIndex], Signal::RawSignal.Multiply);
                 if (PulseIsHigh(pulseIndex))
                 {
                     pulseData.pulse[dataPulseIndex] = pulseDuration;
@@ -255,7 +256,11 @@ namespace RFLink
 
 
             //Serial.println("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=");
-            int decodedCount = run_ook_demods(&r_devs, &pulseData);
+            int decodedCount = 0; //run_ook_demods(&r_devs, &pulseData);
+            decodedCount += run_fsk_demods(&r_devs, &pulseData);
+            /*lacrosse_tx35.output_fn  = data_acquired_handler;
+            lacrosse_tx35.output_ctx = NULL;//cfg;
+            lacrosse_tx35.verbose = 10; decodedCount += pulse_demod_pcm(&pulseData, &lacrosse_tx35);*/
             //int decodedCount = pulse_demod_ppm(pulseData, &tfa_pool_thermometer);
             //int decodedCount = pulse_demod_ppm(NULL, &tfa_pool_thermometer);
             //int decodedCount = pulse_demod_ppm(pulseData, NULL);
