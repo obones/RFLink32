@@ -255,7 +255,10 @@ namespace RFLink
         GET_PULSELENGTH;
         SWITCH_TOGGLE;
         if (!CHECK_TIMEOUT)
+        {
+          //Serial.println("Timeout waiting for preamble");
           return false;
+        }
       }
 
       RESET_TIMESTART; // next pulse starts now before we do anything else
@@ -273,7 +276,10 @@ namespace RFLink
         {
           GET_PULSELENGTH;
           if (PulseLength_us > end_timeout)
+          {
+            Serial.println("Breaking after end timeout");              
             break;
+          }
         }
 
         // next Pulse starts now (while we are busy doing calculation)
@@ -284,12 +290,14 @@ namespace RFLink
         {
           // NO RawCodeLength++;
           return false; // Or break; instead, if you think it may worth it.
+          Serial.println("Too short pulse");
         }
 
         // ***   Ending Pulse Check   ***
         if (PulseLength_us > end_timeout) // Again, in main while this time
         {
           RawCodeLength++;
+          Serial.println("Breaking on end pulse");
           break;
         }
 
@@ -320,6 +328,7 @@ namespace RFLink
       }
       else
       {
+        Serial.printf("Not enough raw pulses: %d\r\n", RawCodeLength);
         RawSignal.Number = 0;
       }
 
