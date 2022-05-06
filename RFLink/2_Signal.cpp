@@ -11,6 +11,7 @@
 #include "5_Plugin.h"
 #include "4_Display.h"
 #include "14_rtl_433Bridge.h"
+#include "99_helper.h"
 
 unsigned long SignalCRC = 0L;   // holds the bitstream value for some plugins to identify RF repeats
 unsigned long SignalCRC_1 = 0L; // holds the previous SignalCRC (for mixed burst protocols)
@@ -105,6 +106,9 @@ namespace RFLink
       {
         changesDetected = true;
         params::async_mode_enabled = item->getBoolValue();
+        Serial.print("async_mode_enabled set to ");
+        Serial.print(params::async_mode_enabled);
+        Serial.println(" by refreshParametersFromConfig");
       }
 
       item = Config::findConfigItem(json_name_sample_rate, Config::SectionId::Signal_id);
@@ -197,6 +201,7 @@ namespace RFLink
         Serial.println(F("Signal parameters have changed."));
         if (params::async_mode_enabled && AsyncSignalScanner::isStopped())
         {
+          Serial.println("calling AsyncSignalScanner::startScanning");
           AsyncSignalScanner::startScanning();
         }
       }
@@ -205,6 +210,7 @@ namespace RFLink
     void setup()
     {
       params::async_mode_enabled = false;
+      Serial.println("async_mode_enabled set to false by setup");
       refreshParametersFromConfig();
     }
 
@@ -645,6 +651,7 @@ namespace RFLink
 
       if (!RawSignal.readyForDecoder)
       {
+        //Serial.println("Testing for timeout in main loop");
         if (AsyncSignalScanner::nextPulseTimeoutTime_us > 0 && AsyncSignalScanner::nextPulseTimeoutTime_us < micros())
         { // may be current pulse has now timedout so we have a signal?
 
@@ -654,9 +661,12 @@ namespace RFLink
             return false;
         }
         else
+        {
           return false;
+        }
       }
 
+      Serial.println("Async received a packet, processing it...");
       counters::receivedSignalsCount++; // we have a signal, let's increment counters
 
       byte signalWasDecoded = PluginRXCall(0, 0); // Check all plugins to see which plugin can handle the received signal.
@@ -678,12 +688,14 @@ namespace RFLink
       void enableAsyncReceiver()
       {
         params::async_mode_enabled = true;
+        Serial.println("async_mode_enabled set to true by enableAsyncReceiver");
         startScanning();
       }
 
       void disableAsyncReceiver()
       {
         params::async_mode_enabled = false;
+        Serial.println("async_mode_enabled set to false by disableAsyncReceiver");
         stopScanning();
       }
 
@@ -699,6 +711,7 @@ namespace RFLink
           lastChangedState_us = 0;
           nextPulseTimeoutTime_us = 0;
           attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), RX_pin_changed_state, CHANGE);
+          Serial.println(F("All done, waiting for interrupts"));
         }
         else
         {
@@ -803,6 +816,7 @@ namespace RFLink
 
         if (RawSignal.Number < MIN_RAW_PULSES)
         { // not enough pulses, we ignore it
+          Serial.print("found one packet, but not enough pulses. Pulses = ");Serial.println(RawSignal.Number);
           nextPulseTimeoutTime_us = 0;
           RawSignal.Number = 0;
           RawSignal.Time = 0;
@@ -814,7 +828,7 @@ namespace RFLink
         nextPulseTimeoutTime_us = 0;
         RawSignal.Number++;
         RawSignal.Pulses[RawSignal.Number] = SIGNAL_END_TIMEOUT_US / Signal::params::sample_rate;
-        //Serial.print("found one packet, marking now for decoding. Pulses = ");Serial.println(RawSignal.Number);
+        Serial.print("found one packet, marking now for decoding. Pulses = ");Serial.println(RawSignal.Number);
         RawSignal.readyForDecoder = true;
       }
     };
