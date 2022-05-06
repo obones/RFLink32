@@ -27,7 +27,7 @@ namespace RFLink
     RawSignalStruct RawSignal = {0, 0, 0, 0, 0UL, false, -9999.0F, EndReasons::Unknown}; // current message
 
     #define SLICER_DEFAULT_RFM69 Slicer_enum::Legacy
-    #define SLICER_DEFAULT_CC1101 Slicer_enum::Legacy
+    #define SLICER_DEFAULT_CC1101 Slicer_enum::Carrier_Sense
     #define SLICER_DEFAULT_SX1278 Slicer_enum::RSSI_Advanced
 
     namespace commands
@@ -609,6 +609,180 @@ namespace RFLink
       return false;
     }
 
+    enum CarrierSenseMainLoopStatus
+    {
+      Idle,
+      Processing
+    };
+
+    volatile int ISRCount = 0;
+    volatile bool CarrierSenseAsserted = false;
+
+/*    volatile unsigned long CarrierSenseLastPulse_us = 0;
+    volatile CarrierSenseMainLoopStatus mainLoopStatus = CarrierSenseMainLoopStatus::Idle;
+    volatile bool CarrierSenseToggle = true;
+    volatile unsigned int CarrierSenseRawCodeLength = 0;
+    volatile int CarrierSense_end_timeout;*/
+
+    volatile uint16_t num_pulses = 0;
+    volatile bool receiving = false;
+    volatile unsigned long lastChange = 0;
+
+    void IRAM_ATTR carrierSenseISR() {
+      //Serial.println("============== Carrier sense assert ================");
+      CarrierSenseAsserted = (digitalRead(Radio::pins::RX_NA) != 0);
+      ISRCount++;
+
+      if (CarrierSenseAsserted)
+      {
+        if (!receiving)
+        {
+          lastChange = micros();
+          num_pulses = 0;
+          receiving = true;
+        }
+      }
+      else
+      {
+        receiving = false;
+      }
+    }
+
+    boolean FetchSignal_carrier_sense()
+    {
+      // *********************************************************************************
+      static bool Toggle;
+      //static unsigned long timeStartSeek_ms;
+      static unsigned long timeStartLoop_us;
+      static unsigned int RawCodeLength;
+      static unsigned long PulseLength_us;
+      static const bool Start_Level = LOW;
+      // *********************************************************************************
+
+#define RESET_TIMESTART timeStartLoop_us = micros();
+#define CHECK_RF ((digitalRead(Radio::pins::RX_DATA) == Start_Level) ^ Toggle)
+//#define CHECK_TIMEOUT ((millis() - timeStartSeek_ms) < params::seek_timeout)
+#define GET_PULSELENGTH PulseLength_us = micros() - timeStartLoop_us
+#define SWITCH_TOGGLE Toggle = !Toggle
+#define STORE_PULSE (RawSignal.Pulses[RawCodeLength++] = PulseLength_us / params::sample_rate)
+
+      // if no carrier sensed, abort early
+      if (!CarrierSenseAsserted)
+        return false;
+
+      // ***   Init Vars   ***
+      Toggle = false;
+      RawCodeLength = 0;
+      //CarrierSenseLastPulse_us = 0;
+      RawSignal.Pulses = RawSignal.RawPulses;
+
+      RESET_TIMESTART; // next pulse starts now before we do anything else
+      //Serial.print ("PulseLength: "); Serial.println (PulseLength_us);
+
+      // ************************
+      // ***   Message Loop   ***
+      // ************************
+      int CarrierSense_end_timeout = 20000; //params::signal_end_timeout; 
+      while (CarrierSenseAsserted && RawCodeLength < RAW_BUFFER_SIZE)
+      {
+
+        while (CHECK_RF)
+        {
+          GET_PULSELENGTH;
+          if (PulseLength_us > CarrierSense_end_timeout)
+            break;
+        }
+
+        // next Pulse starts now (while we are busy doing calculation)
+        RESET_TIMESTART;
+        //CarrierSenseLastPulse_us = timeStartLoop_us;
+
+        // ***   Too short Pulse Check   ***
+        if (PulseLength_us < params::min_pulse_len)
+        {
+          // NO RawCodeLength++;
+          //Serial.printf("%d : Too short\r\n", PulseLength_us);
+          return false; // Or break; instead, if you think it may worth it.
+        }
+
+        // ***   Ending Pulse Check   ***
+        if (PulseLength_us > CarrierSense_end_timeout) // Again, in main while this time
+        {
+          RawCodeLength++;
+          break;
+        }
+
+        if(RawCodeLength%2 == 0) {
+          auto newRssi = Radio::getCurrentRssi();
+          if( RawSignal.rssi+10 < newRssi ) {
+            RawCodeLength = 0;
+            RawSignal.rssi = newRssi;
+          }
+        }
+
+        // ***   Prepare Next   ***
+        SWITCH_TOGGLE;
+
+        // ***   Store Pulse   ***
+        STORE_PULSE;
+      }
+
+      if (RawCodeLength >= params::min_raw_pulses)
+      {
+        RawSignal.Pulses[RawCodeLength] = CarrierSense_end_timeout;  // Last element contains the timeout.
+        RawSignal.Number = RawCodeLength - 1; // Number of received pulse times (pulsen *2)
+        RawSignal.Multiply = params::sample_rate;
+        RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits
+        //Serial.print ("D");
+        Serial.print("CarrierSense: received ");
+        Serial.println(RawCodeLength);
+        return true;
+      }
+      else
+      {
+        Serial.print("CarrierSense: Not enough pulses ");
+        Serial.println(RawCodeLength);
+        RawSignal.Number = 0;
+      }
+
+      return false;
+    }
+
+    #define MAX_PULSES 1000
+    #define MINIMUM_PULSE_LENGTH 40
+    volatile uint16_t pulses[MAX_PULSES];
+    volatile uint16_t gaps[MAX_PULSES];
+
+    void IRAM_ATTR dataISR()
+    {
+      if (!CarrierSenseAsserted)
+      {
+        return;
+      }
+
+      const unsigned long now = micros();
+      const unsigned int duration = now - lastChange;
+      //if (duration > MINIMUM_PULSE_LENGTH)
+      {
+        if (digitalRead(Radio::pins::RX_DATA) != 0)
+        {
+          pulses[num_pulses] = duration;
+        }
+        else
+        {
+          gaps[num_pulses] = duration;
+          num_pulses++;
+        }
+
+        /*static unsigned int RawCodeLength;
+        if (RawCodeLength < RAW_BUFFER_SIZE)
+          RawSignal.Pulses[RawCodeLength++] = duration / params::sample_rate;*/
+
+        lastChange = now;
+      }
+    }
+
+
     boolean ScanEvent()
     {
       if (Radio::current_State != Radio::States::Radio_RX)
@@ -627,33 +801,56 @@ namespace RFLink
             success = FetchSignal_sync();
           else if (runtime::appliedSlicer == Slicer_enum::RSSI_Advanced)
             success = FetchSignal_sync_rssi();
+          else if (runtime::appliedSlicer == Slicer_enum::Carrier_Sense)
+            success = FetchSignal_carrier_sense();
           else {
             sprintf_P(printBuf, PSTR("Invalid slicer selected (%i)"), (int) runtime::appliedSlicer);
           }
 
           if (success)
           { 
+            SerialPrintFreeMemInfo();
+            SerialPrintLn("");
+
+            SerialPrintMsg("ISR calls: ");
+            SerialPrint(ISRCount);
+            SerialPrintLn("");
+
             counters::receivedSignalsCount += rtl_433Bridge::processReceivedData(); 
 
-            for (int i = 1; i < RawSignal.Number; i++) 
-                if (RawSignal.Pulses[i] > params::signal_end_timeout)
+            bool result = false;
+            int PulsesCount = RawSignal.Number;
+            for (int i = 1; i < PulsesCount; i++) 
+                if (RawSignal.RawPulses[i] > params::signal_end_timeout)
                 {
-                    RawSignal.Number = i - 0;
-                    //Serial.printf("Breaking at pulse %d\r\n", i - 0);
-                    break;
-                }
+                  RawSignal.Number = &RawSignal.RawPulses[i] - RawSignal.Pulses;
+                  //Serial.printf("Breaking at pulse %d\r\n", i);
+                  //Serial.printf("RawSignal.Number = %d\r\n", RawSignal.Number);
               
-            // RF: *** data start ***
-            counters::receivedSignalsCount++;
-            if (PluginRXCall(0, 0))
-            { // Check all plugins to see which plugin can handle the received signal.
-              counters::successfullyDecodedSignalsCount++;
-              RepeatingTimer = millis() + params::signal_repeat_time;
-              //auto responseLength = strlen(pbuffer);
-              //if(responseLength>1)
-              //  sprintf(&pbuffer[responseLength-2], "RSSI=%i;\r\n", (int)RawSignal.rssi);
-              return true;
-            }
+                  // RF: *** data start ***
+                  counters::receivedSignalsCount++;
+                  if (PluginRXCall(0, 0))
+                  { // Check all plugins to see which plugin can handle the received signal.
+                    counters::successfullyDecodedSignalsCount++;
+                    RepeatingTimer = millis() + params::signal_repeat_time;
+                    //auto responseLength = strlen(pbuffer);
+                    //if(responseLength>1)
+                    //  sprintf(&pbuffer[responseLength-2], "RSSI=%i;\r\n", (int)RawSignal.rssi);
+                    result |= true;
+                    Serial.println("Found a plugin that decodes this");
+                    RFLink::sendMsgFromBuffer();
+                  }
+
+                  RawSignal.Pulses = &RawSignal.RawPulses[i + 1];
+                  /*while ((i < PulsesCount) && (RawSignal.Pulses[0] < params::min_preamble))
+                  {
+                    RawSignal.Pulses++;
+                    i++;
+                  }
+                  Serial.printf("Skipped to pulse %d in look for preamble\r\n", i);*/
+                }
+
+            return result;
           }
         } // while
         return false;
@@ -664,7 +861,7 @@ namespace RFLink
       if (!RawSignal.readyForDecoder)
       {
         //Serial.println("Testing for timeout in main loop");
-        if (AsyncSignalScanner::nextPulseTimeoutTime_us > 0 && AsyncSignalScanner::nextPulseTimeoutTime_us < micros())
+        if ((AsyncSignalScanner::nextPulseTimeoutTime_us > 0 && AsyncSignalScanner::nextPulseTimeoutTime_us < micros())/* || !CarrierSenseAsserted*/)
         { // may be current pulse has now timedout so we have a signal?
 
           AsyncSignalScanner::onPulseTimerTimeout(); // refresh signal properties
@@ -794,6 +991,14 @@ namespace RFLink
 
         if (RawSignal.readyForDecoder) // it means previous packet has not been decoded yet, let's forget about it
           return;
+
+        if (!CarrierSenseAsserted)  // only count when carrier has been sensed
+        {
+          nextPulseTimeoutTime_us = 0; // stop watching for a timeout
+          RawSignal.Number = 0;
+          RawSignal.Time = 0;
+          return;
+        }
 
         unsigned long pulseLength_us = changeTime_us - lastChangedState_us;
         lastChangedState_us = changeTime_us;
@@ -1237,7 +1442,8 @@ namespace RFLink
 
     const char * const SlicerNamesStrings[] PROGMEM = {
             "Legacy",
-            "RSSI_advanced"
+            "RSSI_advanced",
+            "Carrier_sense"
     };
     static_assert(sizeof(SlicerNamesStrings)/sizeof(char *) == Slicer_enum::SLICERS_EOF, "SlicerNamesStrings has missing/extra names, please compare with Slicer_enum enum declarations");
 
