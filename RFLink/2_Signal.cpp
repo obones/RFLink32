@@ -602,6 +602,126 @@ namespace RFLink
       return false;
     }
 
+    enum CarrierSenseMainLoopStatus
+    {
+      Idle,
+      Processing
+    };
+
+    volatile int ISRCount = 0;
+    volatile bool CarrierSenseAsserted = false;
+/*    volatile unsigned long CarrierSenseLastPulse_us = 0;
+    volatile CarrierSenseMainLoopStatus mainLoopStatus = CarrierSenseMainLoopStatus::Idle;
+    volatile bool CarrierSenseToggle = true;
+    volatile unsigned int CarrierSenseRawCodeLength = 0;
+    volatile int CarrierSense_end_timeout;*/
+
+    void IRAM_ATTR carrierSenseISR() {
+      //Serial.println("============== Carrier sense assert ================");
+      CarrierSenseAsserted = (digitalRead(Radio::pins::RX_NA) != 0);
+      ISRCount++;
+    }
+
+    boolean FetchSignal_carrier_sense()
+    {
+      // *********************************************************************************
+      static bool Toggle;
+      //static unsigned long timeStartSeek_ms;
+      static unsigned long timeStartLoop_us;
+      static unsigned int RawCodeLength;
+      static unsigned long PulseLength_us;
+      static const bool Start_Level = LOW;
+      // *********************************************************************************
+
+#define RESET_TIMESTART timeStartLoop_us = micros();
+#define CHECK_RF ((digitalRead(Radio::pins::RX_DATA) == Start_Level) ^ Toggle)
+//#define CHECK_TIMEOUT ((millis() - timeStartSeek_ms) < params::seek_timeout)
+#define GET_PULSELENGTH PulseLength_us = micros() - timeStartLoop_us
+#define SWITCH_TOGGLE Toggle = !Toggle
+#define STORE_PULSE (RawSignal.Pulses[RawCodeLength++] = PulseLength_us / params::sample_rate)
+
+      // if no carrier sensed, abort early
+      if (!CarrierSenseAsserted)
+        return false;
+
+      // ***   Init Vars   ***
+      Toggle = false;
+      RawCodeLength = 0;
+      //CarrierSenseLastPulse_us = 0;
+      RawSignal.Pulses = RawSignal.RawPulses;
+
+      RESET_TIMESTART; // next pulse starts now before we do anything else
+      //Serial.print ("PulseLength: "); Serial.println (PulseLength_us);
+
+      // ************************
+      // ***   Message Loop   ***
+      // ************************
+      int CarrierSense_end_timeout = 20000; //params::signal_end_timeout; 
+      while (CarrierSenseAsserted && RawCodeLength < RAW_BUFFER_SIZE)
+      {
+
+        while (CHECK_RF)
+        {
+          GET_PULSELENGTH;
+          if (PulseLength_us > CarrierSense_end_timeout)
+            break;
+        }
+
+        // next Pulse starts now (while we are busy doing calculation)
+        RESET_TIMESTART;
+        //CarrierSenseLastPulse_us = timeStartLoop_us;
+
+        // ***   Too short Pulse Check   ***
+        if (PulseLength_us < params::min_pulse_len)
+        {
+          // NO RawCodeLength++;
+          //Serial.printf("%d : Too short\r\n", PulseLength_us);
+          return false; // Or break; instead, if you think it may worth it.
+        }
+
+        // ***   Ending Pulse Check   ***
+        if (PulseLength_us > CarrierSense_end_timeout) // Again, in main while this time
+        {
+          RawCodeLength++;
+          break;
+        }
+
+        if(RawCodeLength%2 == 0) {
+          auto newRssi = Radio::getCurrentRssi();
+          if( RawSignal.rssi+10 < newRssi ) {
+            RawCodeLength = 0;
+            RawSignal.rssi = newRssi;
+          }
+        }
+
+        // ***   Prepare Next   ***
+        SWITCH_TOGGLE;
+
+        // ***   Store Pulse   ***
+        STORE_PULSE;
+      }
+
+      if (RawCodeLength >= params::min_raw_pulses)
+      {
+        RawSignal.Pulses[RawCodeLength] = CarrierSense_end_timeout;  // Last element contains the timeout.
+        RawSignal.Number = RawCodeLength - 1; // Number of received pulse times (pulsen *2)
+        RawSignal.Multiply = params::sample_rate;
+        RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits
+        //Serial.print ("D");
+        Serial.print("CarrierSense: received ");
+        Serial.println(RawCodeLength);
+        return true;
+      }
+      else
+      {
+        Serial.print("CarrierSense: Not enough pulses ");
+        Serial.println(RawCodeLength);
+        RawSignal.Number = 0;
+      }
+
+      return false;
+    }
+
     boolean ScanEvent()
     {
       if (Radio::current_State != Radio::States::Radio_RX)
@@ -620,6 +740,8 @@ namespace RFLink
             success = FetchSignal_sync();
           else if (runtime::appliedSlicer == Slicer_enum::RSSI_Advanced)
             success = FetchSignal_sync_rssi();
+          else if (runtime::appliedSlicer == Slicer_enum::Carrier_Sense)
+            success = FetchSignal_carrier_sense();
           else {
             sprintf_P(printBuf, PSTR("Invalid slicer selected (%i)"), (int) runtime::appliedSlicer);
           }
@@ -1249,7 +1371,8 @@ namespace RFLink
 
     const char * const SlicerNamesStrings[] PROGMEM = {
             "Legacy",
-            "RSSI_advanced"
+            "RSSI_advanced",
+            "Carrier_sense"
     };
     static_assert(sizeof(SlicerNamesStrings)/sizeof(char *) == Slicer_enum::SLICERS_EOF, "SlicerNamesStrings has missing/extra names, please compare with Slicer_enum enum declarations");
 

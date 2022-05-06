@@ -53,6 +53,7 @@ namespace RFLink {
       Default = -1,
       Legacy,
       RSSI_Advanced,
+      Carrier_Sense,
       SLICERS_EOF,
     };
 
@@ -153,6 +154,8 @@ namespace RFLink {
         return params::async_mode_enabled;
       };
     };
+
+    void IRAM_ATTR carrierSenseISR();
 
   } // end of ns Signal
 } //  end of ns RFLink
