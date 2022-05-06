@@ -173,7 +173,9 @@ namespace RFLink { namespace Radio  {
 
       item = Config::findConfigItem(json_name_hardware, Config::SectionId::Radio_id);
       if( strcmp(hardwareNames[hardware], item->getCharValue()) != 0) {
-        newHardwareId =  hardwareIDFromString(item->getCharValue());
+//        newHardwareId =  hardwareIDFromString(item->getCharValue());
+        newHardwareId = HardwareType::HW_CC1101_t;
+
         if(newHardwareId == HardwareType::HW_EOF_t ) {
           Serial.printf_P(PSTR("Unsupported radio hardware name '%s' was provided, falling back to default generic receiver!\r\n"), item->getCharValue());
           changesDetected = true;
