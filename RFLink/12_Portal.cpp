@@ -33,7 +33,7 @@ namespace RFLink { namespace Portal {
 
         Config::ConfigItem configItems[] =  {
                 Config::ConfigItem(json_name_enabled,      Config::SectionId::Portal_id, true, paramsUpdatedCallback),
-                Config::ConfigItem(json_name_auth_enabled, Config::SectionId::Portal_id, true, paramsUpdatedCallback),
+                Config::ConfigItem(json_name_auth_enabled, Config::SectionId::Portal_id, false, paramsUpdatedCallback),
                 Config::ConfigItem(json_name_auth_user,    Config::SectionId::Portal_id, RFLINK_WEBUI_DEFAULT_USER, paramsUpdatedCallback),
                 Config::ConfigItem(json_name_auth_password,Config::SectionId::Portal_id, RFLINK_WEBUI_DEFAULT_PASSWORD, paramsUpdatedCallback),
                 Config::ConfigItem(), // dont remove it!
