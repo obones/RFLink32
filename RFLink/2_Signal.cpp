@@ -106,6 +106,9 @@ namespace RFLink
       {
         changesDetected = true;
         params::async_mode_enabled = item->getBoolValue();
+        Serial.print("async_mode_enabled set to ");
+        Serial.print(params::async_mode_enabled);
+        Serial.println(" by refreshParametersFromConfig");
       }
 
       item = Config::findConfigItem(json_name_sample_rate, Config::SectionId::Signal_id);
@@ -198,6 +201,7 @@ namespace RFLink
         Serial.println(F("Signal parameters have changed."));
         if (params::async_mode_enabled && AsyncSignalScanner::isStopped())
         {
+          Serial.println("calling AsyncSignalScanner::startScanning");
           AsyncSignalScanner::startScanning();
         }
       }
@@ -206,6 +210,7 @@ namespace RFLink
     void setup()
     {
       params::async_mode_enabled = false;
+      Serial.println("async_mode_enabled set to false by setup");
       refreshParametersFromConfig();
     }
 
@@ -671,6 +676,7 @@ namespace RFLink
 
       if (!RawSignal.readyForDecoder)
       {
+        //Serial.println("Testing for timeout in main loop");
         if (AsyncSignalScanner::nextPulseTimeoutTime_us > 0 && AsyncSignalScanner::nextPulseTimeoutTime_us < micros())
         { // may be current pulse has now timedout so we have a signal?
 
@@ -680,7 +686,9 @@ namespace RFLink
             return false;
         }
         else
+        {
           return false;
+        }
       }
 
       counters::receivedSignalsCount++; // we have a signal, let's increment counters
@@ -704,12 +712,14 @@ namespace RFLink
       void enableAsyncReceiver()
       {
         params::async_mode_enabled = true;
+        Serial.println("async_mode_enabled set to true by enableAsyncReceiver");
         startScanning();
       }
 
       void disableAsyncReceiver()
       {
         params::async_mode_enabled = false;
+        Serial.println("async_mode_enabled set to false by disableAsyncReceiver");
         stopScanning();
       }
 
@@ -725,6 +735,7 @@ namespace RFLink
           lastChangedState_us = 0;
           nextPulseTimeoutTime_us = 0;
           attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), RX_pin_changed_state, CHANGE);
+          Serial.println(F("All done, waiting for interrupts"));
         }
         else
         {
