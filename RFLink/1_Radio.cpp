@@ -16,6 +16,13 @@
 
 #include <RadioLib.h>
 
+#include "ELECHOUSE_CC1101_SRC_DRV.h"
+#define CC1101_2FSK 0
+#define CC1101_GFSK 1
+#define CC1101_ASK 2
+#define CC1101_4FSK 3
+#define CC1101_MSK 4
+
 Module radioLibModule(5, -1, 4, -1);
 SX1278 *radio_SX1278 = nullptr;
 SX1276 *radio_SX1276 = nullptr;
