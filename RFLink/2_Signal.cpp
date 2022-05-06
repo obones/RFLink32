@@ -10,6 +10,8 @@
 #include "2_Signal.h"
 #include "5_Plugin.h"
 #include "4_Display.h"
+#include "14_rtl_433Bridge.h"
+#include "99_helper.h"
 
 unsigned long SignalCRC = 0L;   // holds the bitstream value for some plugins to identify RF repeats
 unsigned long SignalCRC_1 = 0L; // holds the previous SignalCRC (for mixed burst protocols)
@@ -230,6 +232,7 @@ namespace RFLink
       Toggle = true;
       RawCodeLength = 0;
       PulseLength_us = 0;
+      RawSignal.Pulses = RawSignal.RawPulses;
 
       // ***********************************
       // ***   Scan for Preamble Pulse   ***
@@ -257,13 +260,14 @@ namespace RFLink
       // ************************
       // ***   Message Loop   ***
       // ************************
+      int end_timeout = 20000; //params::signal_end_timeout; 
       while (RawCodeLength < RAW_BUFFER_SIZE)
       {
 
         while (CHECK_RF)
         {
           GET_PULSELENGTH;
-          if (PulseLength_us > params::signal_end_timeout)
+          if (PulseLength_us > end_timeout)
             break;
         }
 
@@ -274,11 +278,12 @@ namespace RFLink
         if (PulseLength_us < params::min_pulse_len)
         {
           // NO RawCodeLength++;
+          //Serial.printf("%d : Too short\r\n", PulseLength_us);
           return false; // Or break; instead, if you think it may worth it.
         }
 
         // ***   Ending Pulse Check   ***
-        if (PulseLength_us > params::signal_end_timeout) // Again, in main while this time
+        if (PulseLength_us > end_timeout) // Again, in main while this time
         {
           RawCodeLength++;
           break;
@@ -301,7 +306,7 @@ namespace RFLink
 
       if (RawCodeLength >= params::min_raw_pulses)
       {
-        RawSignal.Pulses[RawCodeLength] = params::signal_end_timeout;  // Last element contains the timeout.
+        RawSignal.Pulses[RawCodeLength] = end_timeout;  // Last element contains the timeout.
         RawSignal.Number = RawCodeLength - 1; // Number of received pulse times (pulsen *2)
         RawSignal.Multiply = params::sample_rate;
         RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits
@@ -311,6 +316,7 @@ namespace RFLink
       }
       else
       {
+        //Serial.println("Not enough pulses");
         RawSignal.Number = 0;
       }
 
@@ -351,6 +357,7 @@ namespace RFLink
       dynamicGapEnd_us = 0;
       RawSignal.Time = micros();
       RawSignal.endReason = EndReasons::Unknown;
+      RawSignal.Pulses = RawSignal.RawPulses;
 
       // ***********************************
       // ***   Scan for Preamble Pulse   ***
@@ -612,17 +619,49 @@ namespace RFLink
           }
 
           if (success)
-          { // RF: *** data start ***
-            counters::receivedSignalsCount++;
-            if (PluginRXCall(0, 0))
-            { // Check all plugins to see which plugin can handle the received signal.
-              counters::successfullyDecodedSignalsCount++;
-              RepeatingTimer = millis() + params::signal_repeat_time;
-              //auto responseLength = strlen(pbuffer);
-              //if(responseLength>1)
-              //  sprintf(&pbuffer[responseLength-2], "RSSI=%i;\r\n", (int)RawSignal.rssi);
-              return true;
-            }
+          { 
+            SerialPrintFreeMemInfo();
+            SerialPrintLn("");
+
+            SerialPrintMsg("ISR calls: ");
+            SerialPrint(ISRCount);
+            SerialPrintLn("");
+
+            counters::receivedSignalsCount += rtl_433Bridge::processReceivedData(); 
+
+            bool result = false;
+            int PulsesCount = RawSignal.Number;
+            for (int i = 1; i < PulsesCount; i++) 
+                if (RawSignal.RawPulses[i] > params::signal_end_timeout)
+                {
+                  RawSignal.Number = &RawSignal.RawPulses[i] - RawSignal.Pulses;
+                  //Serial.printf("Breaking at pulse %d\r\n", i);
+                  //Serial.printf("RawSignal.Number = %d\r\n", RawSignal.Number);
+              
+                  // RF: *** data start ***
+                  counters::receivedSignalsCount++;
+                  if (PluginRXCall(0, 0))
+                  { // Check all plugins to see which plugin can handle the received signal.
+                    counters::successfullyDecodedSignalsCount++;
+                    RepeatingTimer = millis() + params::signal_repeat_time;
+                    //auto responseLength = strlen(pbuffer);
+                    //if(responseLength>1)
+                    //  sprintf(&pbuffer[responseLength-2], "RSSI=%i;\r\n", (int)RawSignal.rssi);
+                    result |= true;
+                    Serial.println("Found a plugin that decodes this");
+                    RFLink::sendMsgFromBuffer();
+                  }
+
+                  RawSignal.Pulses = &RawSignal.RawPulses[i + 1];
+                  /*while ((i < PulsesCount) && (RawSignal.Pulses[0] < params::min_preamble))
+                  {
+                    RawSignal.Pulses++;
+                    i++;
+                  }
+                  Serial.printf("Skipped to pulse %d in look for preamble\r\n", i);*/
+                }
+
+            return result;
           }
         } // while
         return false;
