@@ -1251,20 +1251,20 @@ namespace RFLink { namespace Radio  {
                       result);
       finalResult |= result;
 
-      result = radio_RFM69->setOOK(true);
+      /*result = radio_RFM69->setOOK(true);
       Serial.printf_P(PSTR("RFM69 SetOOK()=%i\r\n"), result);
-      finalResult |= result;
+      finalResult |= result;*/
 
-      result = radio_RFM69->setDataShaping(RADIOLIB_SHAPING_NONE);
+      /*result = radio_RFM69->setDataShaping(RADIOLIB_SHAPING_NONE);
       Serial.printf_P(PSTR("RFM69 setDataShapingOOK()=%i\r\n"), result);
       finalResult |= result;
 
       result = radio_RFM69->setEncoding(RADIOLIB_ENCODING_NRZ);
       Serial.printf_P(PSTR("RFM69 setEncoding()=%i\r\n"), result);
-      finalResult |= result;
+      finalResult |= result;*/
 
 
-      RssiThresholdTypesEnum newType = RssiThresholdType_default_RFM69;
+      /*RssiThresholdTypesEnum newType = RssiThresholdType_default_RFM69;
       if(params::rssiThresholdType != RssiThresholdTypesEnum::Undefined)
         newType = params::rssiThresholdType;
       if(newType == RssiThresholdTypesEnum::Peak)
@@ -1289,7 +1289,16 @@ namespace RFLink { namespace Radio  {
 
       result = radio_RFM69->setLnaTestBoost(true);
       Serial.printf_P(PSTR("RFM69 setLnaTestBoost()=%i\r\n"), result);
-      finalResult |= result;
+      finalResult |= result;*/
+
+      radio_RFM69->disableContinuousModeBitSync();
+      radio_RFM69->disableSyncWordFiltering();
+      radio_RFM69->disableAddressFiltering();
+      radio_RFM69->disableAES();
+      radio_RFM69->setCrcFiltering(false);
+      radio_RFM69->setOOK(false);
+      radio_RFM69->setDataShaping(RADIOLIB_SHAPING_NONE);
+      radio_RFM69->setLnaTestBoost(true);
 
       return finalResult == 0;
     }
