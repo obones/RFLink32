@@ -1043,15 +1043,15 @@ namespace RFLink { namespace Radio  {
 
       int finalResult = 0;
 
-      auto result = radio_RFM69->begin( (float)params::frequency/1000000,
-                                            (float)params::bitrate/1000,
-                                            50.0F,
-                                            (float)params::rxBandwidth/1000,
+      auto result = radio_RFM69->begin( 868.00,//(float)params::frequency/1000000,
+                                            9.6,//(float)params::bitrate/1000,
+                                            100.0F,
+                                            250.0, //(float)params::rxBandwidth/1000,
                                             12, 16);
       Serial.printf_P(PSTR("Initialized RFM69(freq=%.2fMhz,br=%.3fkbps,rxbw=%.1fkhz)=%i\r\n"),
-                      (float)params::frequency/1000000,
-                      (float)params::bitrate/1000,
-                      (float)params::rxBandwidth/1000,
+                      868.00, //(float)params::frequency/1000000,
+                      9.6, //(float)params::bitrate/1000,
+                      250.0, //(float)params::rxBandwidth/1000,
                       result);
       finalResult |= result;
 
