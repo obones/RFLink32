@@ -46,19 +46,21 @@
 // ==================================================================================
 #define MEBUS_PLUGIN_ID 040
 #define PLUGIN_DESC_040 "Mebus"
-#define MEBUS_PULSECOUNT 58
+#define MEBUS_PULSECOUNT_MIN 58
+#define MEBUS_PULSECOUNT_MAX 58
 
-#define MEBUS_MIDHI_D 550
+#define MEBUS_MIDHI_D 580
 #define MEBUS_PULSEMIN_D 1500
-#define MEBUS_PULSEMINMAX_D 2100
+#define MEBUS_PULSEMINMAX_D 2200
 #define MEBUS_PULSEMAXMIN_D 3400
 
 #ifdef PLUGIN_040
 #include "../4_Display.h"
+#define PLUGIN_040_DEBUG
 
 boolean Plugin_040(byte function, const char *string)
 {
-   if (RawSignal.Number != MEBUS_PULSECOUNT) {
+   if (RawSignal.Number < MEBUS_PULSECOUNT_MIN || RawSignal.Number > MEBUS_PULSECOUNT_MAX) {
      #ifdef PLUGIN_040_DEBUG
      Serial.println(F("Mebus: failed  RawSignal.Number != MEBUS_PULSECOUNT"));
      #endif
@@ -79,29 +81,45 @@ boolean Plugin_040(byte function, const char *string)
    //==================================================================================
    // Get all 28 bits
    //==================================================================================
-   for (byte x = 2; x <= MEBUS_PULSECOUNT - 2; x += 2)
+   for (byte x = 2; x <= MEBUS_PULSECOUNT_MIN - 2; x += 2)
    {
       if (RawSignal.Pulses[x + 1] > MEBUS_MIDHI) {
         #ifdef PLUGIN_040_DEBUG
-        Serial.println(F("Mebus: failed  RawSignal.Pulses[x + 1] > MEBUS_MIDHI"));
+        Serial.print(F("Mebus: failed MEBUS_MIDHI at pulse "));
+        Serial.print(x + 1);
+        Serial.print(F(" - "));
+        Serial.print(RawSignal.Pulses[x + 1] * RawSignal.Multiply);
+        Serial.print(F(" > "));
+        Serial.println(MEBUS_MIDHI * RawSignal.Multiply);
         #endif
         return false; // make sure inbetween pulses are not too long
       }
 
       bitstream <<= 1; // Always shift
-      if (RawSignal.Pulses[x] > MEBUS_PULSEMAXMIN)
+      uint16_t currentPulseDuration = RawSignal.Pulses[x];
+      if (currentPulseDuration > MEBUS_PULSEMAXMIN)
          bitstream |= 0x1;
       else
       {
-         if (RawSignal.Pulses[x] > MEBUS_PULSEMINMAX) {
+         if (currentPulseDuration > MEBUS_PULSEMINMAX) {
            #ifdef PLUGIN_040_DEBUG
-           Serial.println(F("Mebus: failed  RawSignal.Pulses[x] > MEBUS_PULSEMINMAX"));
+            Serial.print(F("Mebus: failed MEBUS_PULSEMINMAX at pulse "));
+            Serial.print(x);
+            Serial.print(F(" - "));
+            Serial.print(currentPulseDuration * RawSignal.Multiply);
+            Serial.print(F(" > "));
+            Serial.println(MEBUS_PULSEMINMAX * RawSignal.Multiply);
            #endif
            return false; // invalid pulse length
          }
-         if (RawSignal.Pulses[x] < MEBUS_PULSEMIN) {
+         if (currentPulseDuration < MEBUS_PULSEMIN) {
            #ifdef PLUGIN_040_DEBUG
-           Serial.println(F("Mebus: failed  RawSignal.Pulses[x] < MEBUS_PULSEMIN"));
+            Serial.print(F("Mebus: failed MEBUS_PULSEMIN at pulse "));
+            Serial.print(x);
+            Serial.print(F(" - "));
+            Serial.print(currentPulseDuration * RawSignal.Multiply);
+            Serial.print(F(" < "));
+            Serial.println(MEBUS_PULSEMIN * RawSignal.Multiply);
            #endif
            return false; // invalid pulse length
          }
@@ -113,7 +131,12 @@ boolean Plugin_040(byte function, const char *string)
    // Perform a quick sanity check
    //==================================================================================
    if (bitstream == 0)
+    {
+        #ifdef PLUGIN_040_DEBUG
+        Serial.println(F("Mebus: failed bitstream = 0"));
+        #endif
       return false;
+    }
    //==================================================================================
    // Prevent repeating signals from showing up
    //==================================================================================

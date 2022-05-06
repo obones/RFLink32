@@ -20,6 +20,7 @@ boolean Plugin_016(byte function, const char *string)
    const int SLVCR_MinPulses = 180;
    const int SLVCR_MaxPulses = 320;
 
+   SerialDebugPrintln(RawSignal.Number);
    if (RawSignal.Number >= SLVCR_MinPulses && RawSignal.Number <= SLVCR_MaxPulses) 
    {
       const int SLVCR_StartPulseDuration = 2000 / RawSignal.Multiply;
