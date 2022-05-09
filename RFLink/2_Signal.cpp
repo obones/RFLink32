@@ -998,7 +998,12 @@ namespace RFLink
           return;
 
         if (!CarrierSenseAsserted)  // only count when carrier has been sensed
+        {
+          nextPulseTimeoutTime_us = 0; // stop watching for a timeout
+          RawSignal.Number = 0;
+          RawSignal.Time = 0;
           return;
+        }
 
         unsigned long pulseLength_us = changeTime_us - lastChangedState_us;
         lastChangedState_us = changeTime_us;
@@ -1447,7 +1452,8 @@ namespace RFLink
     const char * const SlicerNamesStrings[] PROGMEM = {
             "Legacy",
             "RSSI_advanced",
-            "Carrier_sense"
+            "Carrier_sense",
+            "Carrier_sense_RMT"
     };
     static_assert(sizeof(SlicerNamesStrings)/sizeof(char *) == Slicer_enum::SLICERS_EOF, "SlicerNamesStrings has missing/extra names, please compare with Slicer_enum enum declarations");
 
