@@ -264,7 +264,7 @@ namespace RFLink
 
         rmt_rx.rx_config.idle_threshold = 5000; //20000;
         rmt_rx.rx_config.filter_en = true;
-        rmt_rx.rx_config.filter_ticks_thresh = 100;
+        rmt_rx.rx_config.filter_ticks_thresh = 100;  // Counted in source clock, not divided counter clock
 
         Serial.println("Configuring RMT");
         rmt_check(rmt_config(&rmt_rx), "config");
@@ -911,6 +911,12 @@ namespace RFLink
             {
               Serial.printf("%d: %d - %d: %d\n", items[itemIndex].level0, items[itemIndex].duration0, items[itemIndex].level1, items[itemIndex].duration1);
             }
+          }
+          else
+          {
+            // This happens a lot because GDO0 pin is really noisy
+            // So we do nothing but give the items back to the ring buffer
+            //Serial.println("Items found without carrier!");
           }
 
           // return items to the ring buffer
