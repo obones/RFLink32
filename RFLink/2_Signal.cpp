@@ -215,6 +215,28 @@ namespace RFLink
       refreshParametersFromConfig();
     }
 
+    void IRAM_ATTR carrierSenseISR();
+    void IRAM_ATTR dataISR();
+
+    void setupIdle()
+    {
+      ::detachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA));
+
+      if( RFLink::Signal::params::async_mode_enabled )
+        RFLink::Signal::AsyncSignalScanner::stopScanning();
+    }
+
+    void setupReception()
+    {
+      pinMode(Radio::pins::RX_NA, INPUT);
+
+      ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &dataISR, CHANGE);
+      ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseISR, CHANGE);
+
+      if (params::async_mode_enabled)
+        AsyncSignalScanner::startScanning();
+    }
+
     boolean FetchSignal_sync()
     {
       // *********************************************************************************
@@ -610,16 +632,35 @@ namespace RFLink
 
     volatile int ISRCount = 0;
     volatile bool CarrierSenseAsserted = false;
+
 /*    volatile unsigned long CarrierSenseLastPulse_us = 0;
     volatile CarrierSenseMainLoopStatus mainLoopStatus = CarrierSenseMainLoopStatus::Idle;
     volatile bool CarrierSenseToggle = true;
     volatile unsigned int CarrierSenseRawCodeLength = 0;
     volatile int CarrierSense_end_timeout;*/
 
+    volatile uint16_t num_pulses = 0;
+    volatile bool receiving = false;
+    volatile unsigned long lastChange = 0;
+
     void IRAM_ATTR carrierSenseISR() {
       //Serial.println("============== Carrier sense assert ================");
       CarrierSenseAsserted = (digitalRead(Radio::pins::RX_NA) != 0);
       ISRCount++;
+
+      if (CarrierSenseAsserted)
+      {
+        if (!receiving)
+        {
+          lastChange = micros();
+          num_pulses = 0;
+          receiving = true;
+        }
+      }
+      else
+      {
+        receiving = false;
+      }
     }
 
     boolean FetchSignal_carrier_sense()
@@ -720,6 +761,40 @@ namespace RFLink
       }
 
       return false;
+    }
+
+    #define MAX_PULSES 1000
+    #define MINIMUM_PULSE_LENGTH 40
+    volatile uint16_t pulses[MAX_PULSES];
+    volatile uint16_t gaps[MAX_PULSES];
+
+    void IRAM_ATTR dataISR()
+    {
+      if (!CarrierSenseAsserted)
+      {
+        return;
+      }
+
+      const unsigned long now = micros();
+      const unsigned int duration = now - lastChange;
+      //if (duration > MINIMUM_PULSE_LENGTH)
+      {
+        if (digitalRead(Radio::pins::RX_DATA) != 0)
+        {
+          pulses[num_pulses] = duration;
+        }
+        else
+        {
+          gaps[num_pulses] = duration;
+          num_pulses++;
+        }
+
+        /*static unsigned int RawCodeLength;
+        if (RawCodeLength < RAW_BUFFER_SIZE)
+          RawSignal.Pulses[RawCodeLength++] = duration / params::sample_rate;*/
+
+        lastChange = now;
+      }
     }
 
     boolean ScanEvent()

@@ -105,6 +105,9 @@ namespace RFLink {
     extern Config::ConfigItem configItems[];
 
     void setup();
+    void setupIdle(); // to be called when the radio has entered OFF mode
+    void setupReception(); // to be called when the radio has entered RX mode
+
     void paramsUpdatedCallback();
     void refreshParametersFromConfig(bool triggerChanges=true);
     void RawSendRF(RawSignalStruct *signal);
@@ -154,8 +157,6 @@ namespace RFLink {
         return params::async_mode_enabled;
       };
     };
-
-    void IRAM_ATTR carrierSenseISR();
 
   } // end of ns Signal
 } //  end of ns RFLink

@@ -868,10 +868,7 @@ namespace RFLink { namespace Radio  {
         switch (new_State)
         {
           case Radio_OFF: {
-            ::detachInterrupt(digitalPinToInterrupt(pins::RX_NA));
-
-            if( RFLink::Signal::params::async_mode_enabled )
-              RFLink::Signal::AsyncSignalScanner::stopScanning();
+            Signal::setupIdle();
 
             auto success = radio_CC1101->standby();
             if(success != 0 ){
@@ -901,12 +898,7 @@ namespace RFLink { namespace Radio  {
 
             pinMode(pins::RX_DATA, INPUT);
 
-            pinMode(pins::RX_NA, INPUT);
-            //radio_CC1101->setGdo2Action(&carrierSenseISR, RISING);
-            ::attachInterrupt(digitalPinToInterrupt(pins::RX_NA), &Signal::carrierSenseISR, CHANGE);
-
-            if( RFLink::Signal::params::async_mode_enabled )
-              RFLink::Signal::AsyncSignalScanner::startScanning();
+            RFLink::Signal::setupReception();
 
             break;
           }
