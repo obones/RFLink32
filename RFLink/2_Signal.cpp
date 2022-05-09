@@ -880,6 +880,12 @@ namespace RFLink
     {
       static bool previousCSState = false;
 
+      if (!previousCSState)
+      {
+        RawSignal.Pulses = RawSignal.RawPulses;
+        RawSignal.Number = 0;
+      }
+
       /*if (!receiving && RawSignal.readyForDecoder)
       {
         SerialPrintFreeMemInfo();
@@ -908,9 +914,19 @@ namespace RFLink
             SerialPrint(itemCount);
             SerialPrintLn(" items");
 
+            // Make sure odd indexes receive the "high" pulses
+            if (itemCount > 0 && items[0].level0)
+              RawSignal.Number++;
+
             for (size_t itemIndex = 0; itemIndex < itemCount; itemIndex++)
             {
-              Serial.printf("%d: %d - %d: %d\n", items[itemIndex].level0, items[itemIndex].duration0, items[itemIndex].level1, items[itemIndex].duration1);
+              RawSignal.Pulses[RawSignal.Number++] = items[itemIndex].duration0 / params::sample_rate;
+              RawSignal.Pulses[RawSignal.Number++] = items[itemIndex].duration1 / params::sample_rate;
+
+              if (items[itemIndex].level0 == items[itemIndex].level1)
+                Serial.println("Same level found");
+
+              //Serial.printf("%d: %d - %d: %d\n", items[itemIndex].level0, items[itemIndex].duration0, items[itemIndex].level1, items[itemIndex].duration1);
             }
           }
           else
@@ -937,6 +953,15 @@ namespace RFLink
           Serial.println("Carrier is no longer asserted");
       }
 
+      // Data has been received and carrier is no longer sensed? Signal is over
+      if (RawSignal.Number > 0 && !CarrierSenseAsserted)
+      {
+        RawSignal.Pulses[RawSignal.Number] = 20000;  // Last element contains the timeout.
+        RawSignal.Multiply = params::sample_rate;
+        RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits)
+
+        return true;
+      }
 
       return false;
     }
