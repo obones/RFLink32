@@ -21,6 +21,7 @@ byte SignalHashPrevious = 0L;   // holds the last processed plugin number
 unsigned long RepeatingTimer = 0L;
 
 #define RMT_CHANNEL rmt_channel_t::RMT_CHANNEL_0
+#define RMT_IDLE_THRESHOLD 10000
 
 namespace RFLink
 {
@@ -262,14 +263,14 @@ namespace RFLink
         rmt_rx.mem_block_num = 8;
         rmt_rx.rmt_mode = RMT_MODE_RX;
 
-        rmt_rx.rx_config.idle_threshold = 5000; //20000;
+        rmt_rx.rx_config.idle_threshold = RMT_IDLE_THRESHOLD;
         rmt_rx.rx_config.filter_en = true;
         rmt_rx.rx_config.filter_ticks_thresh = 100;  // Counted in source clock, not divided counter clock
 
         Serial.println("Configuring RMT");
         rmt_check(rmt_config(&rmt_rx), "config");
         Serial.println("Installing RMT driver");
-        rmt_check(rmt_driver_install(rmt_rx.channel, 2000, 0), "driver_install");
+        rmt_check(rmt_driver_install(rmt_rx.channel, RMT_IDLE_THRESHOLD / 10 * sizeof(rmt_data_t), 0), "driver_install");  // the longer the idle threshold, the bigger the buffer must be, division by 10 is empiric
 
         rmt_check(rmt_get_ringbuf_handle(RMT_CHANNEL, &rmtRingBuffer), "rmt_get_ringbuf_handle");
 
