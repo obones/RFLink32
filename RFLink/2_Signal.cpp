@@ -6,6 +6,7 @@
 // ************************************* //
 
 #include <Arduino.h>
+#include <driver/rmt.h>
 #include "1_Radio.h"
 #include "2_Signal.h"
 #include "5_Plugin.h"
@@ -18,6 +19,8 @@ unsigned long SignalCRC_1 = 0L; // holds the previous SignalCRC (for mixed burst
 byte SignalHash = 0L;           // holds the processed plugin number
 byte SignalHashPrevious = 0L;   // holds the last processed plugin number
 unsigned long RepeatingTimer = 0L;
+
+#define RMT_CHANNEL rmt_channel_t::RMT_CHANNEL_0
 
 namespace RFLink
 {
@@ -216,7 +219,18 @@ namespace RFLink
     }
 
     void IRAM_ATTR carrierSenseISR();
+    void IRAM_ATTR carrierSenseRMT_ISR();
     void IRAM_ATTR dataISR();
+
+    RingbufHandle_t rmtRingBuffer;
+
+    void rmt_check(esp_err_t errorCode, const char* origin)
+    {
+      if (errorCode != ESP_OK)
+      {
+        Serial.printf("%s: %d - %s\n", origin, errorCode, esp_err_to_name(errorCode));
+      }
+    }
 
     void setupIdle()
     {
@@ -224,14 +238,48 @@ namespace RFLink
 
       if( RFLink::Signal::params::async_mode_enabled )
         RFLink::Signal::AsyncSignalScanner::stopScanning();
+
+      if (Signal::runtime::appliedSlicer == Signal::Slicer_enum::Carrier_Sense_RMT)
+      {
+        Serial.println("Stopping RMT");
+        rmt_check(rmt_rx_stop(RMT_CHANNEL), "stop");
+        Serial.println("Uninstalling RMT driver");
+        rmt_check(rmt_driver_uninstall(RMT_CHANNEL), "uninstall");
+      }
     }
 
     void setupReception()
     {
       pinMode(Radio::pins::RX_NA, INPUT);
 
-      ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &dataISR, CHANGE);
-      ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseISR, CHANGE);
+      if (Signal::runtime::appliedSlicer == Signal::Slicer_enum::Carrier_Sense_RMT)
+      {
+        rmt_config_t rmt_rx;
+
+        rmt_rx.channel = RMT_CHANNEL;
+        rmt_rx.gpio_num = (gpio_num_t)Radio::pins::RX_DATA;
+        rmt_rx.clk_div = 80; // 80MHz / 80 = 1 MHz, 1 us - we  take samples every 1 microseconds
+        rmt_rx.mem_block_num = 8;
+        rmt_rx.rmt_mode = RMT_MODE_RX;
+
+        rmt_rx.rx_config.idle_threshold = 5000; //20000;
+        rmt_rx.rx_config.filter_en = true;
+        rmt_rx.rx_config.filter_ticks_thresh = 100;
+
+        Serial.println("Configuring RMT");
+        rmt_check(rmt_config(&rmt_rx), "config");
+        Serial.println("Installing RMT driver");
+        rmt_check(rmt_driver_install(rmt_rx.channel, 2000, 0), "driver_install");
+
+        rmt_check(rmt_get_ringbuf_handle(RMT_CHANNEL, &rmtRingBuffer), "rmt_get_ringbuf_handle");
+
+        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseRMT_ISR, CHANGE);
+      }
+      else
+      {
+        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &dataISR, CHANGE);
+        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseISR, CHANGE);
+      }
 
       if (params::async_mode_enabled)
         AsyncSignalScanner::startScanning();
@@ -797,6 +845,95 @@ namespace RFLink
       }
     }
 
+    void IRAM_ATTR carrierSenseRMT_ISR() {
+      //Serial.println("============== Carrier sense assert ================");
+      CarrierSenseAsserted = (digitalRead(Radio::pins::RX_NA) != 0);
+      ISRCount++;
+
+      if (CarrierSenseAsserted)
+      {
+        if (!receiving)// && !RawSignal.readyForDecoder)
+        {
+          receiving = true;
+          //rmt_driver_install(RMT_CHANNEL, 1000, 0);
+          /*int idle_thres = RMT.conf_ch[RMT_CHANNEL].conf0.idle_thres;
+          RMT.conf_ch[RMT_CHANNEL].conf0.idle_thres = 0;
+          RMT.conf_ch[RMT_CHANNEL].conf0.idle_thres = idle_thres;
+          RMT.conf_ch[RMT_CHANNEL].conf1.mem_rd_rst = 1;*/
+          rmt_rx_start(RMT_CHANNEL, true);
+        }
+      }
+      else
+      {
+        rmt_rx_stop(RMT_CHANNEL);
+        //rmt_driver_uninstall(RMT_CHANNEL);
+        if (receiving)
+        {
+          //RawSignal.readyForDecoder = true;
+          receiving = false;
+        }
+      }
+    }
+
+    boolean FetchSignal_carrier_sense_rmt()
+    {
+      static bool previousCSState = false;
+
+      /*if (!receiving && RawSignal.readyForDecoder)
+      {
+        SerialPrintFreeMemInfo();
+        SerialPrintLn("");
+
+        SerialPrintMsg("ISR calls: ");
+        SerialPrint(ISRCount);
+        SerialPrintLn("");
+        
+        // get items from RMT ring buffer
+        RingbufHandle_t rb;
+        rmt_get_ringbuf_handle(RMT_CHANNEL, &rb);
+        */
+      //if (previousCSState || CarrierSenseAsserted)
+      {
+        size_t rx_size = 0;
+        rmt_item32_t* items = NULL;
+
+        items = (rmt_item32_t*) xRingbufferReceive(rmtRingBuffer, &rx_size, 1);
+        if (items)
+        {
+          if (previousCSState || CarrierSenseAsserted)
+          {
+            size_t itemCount = rx_size / sizeof(rmt_item32_t);
+
+            SerialPrint(itemCount);
+            SerialPrintLn(" items");
+
+            for (size_t itemIndex = 0; itemIndex < itemCount; itemIndex++)
+            {
+              Serial.printf("%d: %d - %d: %d\n", items[itemIndex].level0, items[itemIndex].duration0, items[itemIndex].level1, items[itemIndex].duration1);
+            }
+          }
+
+          // return items to the ring buffer
+          vRingbufferReturnItem(rmtRingBuffer, (void*) items);
+        }
+
+        // done processing, indicate that we are ready for next packet
+        //RawSignal.readyForDecoder = false;
+      }
+
+      if (CarrierSenseAsserted ^ previousCSState)
+      {
+        previousCSState = CarrierSenseAsserted;
+        if (CarrierSenseAsserted)
+          Serial.println("Carrier is asserted");
+        else
+          Serial.println("Carrier is no longer asserted");
+      }
+
+
+      return false;
+    }
+    
     boolean ScanEvent()
     {
       if (Radio::current_State != Radio::States::Radio_RX)
@@ -817,6 +954,8 @@ namespace RFLink
             success = FetchSignal_sync_rssi();
           else if (runtime::appliedSlicer == Slicer_enum::Carrier_Sense)
             success = FetchSignal_carrier_sense();
+          else if (runtime::appliedSlicer == Slicer_enum::Carrier_Sense_RMT)
+            success = FetchSignal_carrier_sense_rmt();
           else {
             sprintf_P(printBuf, PSTR("Invalid slicer selected (%i)"), (int) runtime::appliedSlicer);
           }

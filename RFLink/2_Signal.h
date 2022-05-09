@@ -54,6 +54,7 @@ namespace RFLink {
       Legacy,
       RSSI_Advanced,
       Carrier_Sense,
+      Carrier_Sense_RMT,
       SLICERS_EOF,
     };
 
