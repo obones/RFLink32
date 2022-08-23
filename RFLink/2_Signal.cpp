@@ -394,6 +394,13 @@ namespace RFLink
         RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits
         //Serial.print ("D");
         //Serial.print (RawCodeLength);
+
+        float rssi = Radio::getCurrentRssi();
+        Serial.printf("Signal found, RSSI = %.1f [ %.0f ]\r\n", rssi, -2.0 * rssi);
+        
+        Serial.println("Clearing interrupts");
+        Radio::clearInterrupts();
+
         return true;
       }
       else
@@ -808,6 +815,13 @@ namespace RFLink
         //Serial.print ("D");
         Serial.print("CarrierSense: received ");
         Serial.println(RawCodeLength);
+
+        float rssi = Radio::getCurrentRssi();
+        Serial.printf("Signal found, RSSI = %.1f [ %.0f ]\r\n", rssi, -2.0 * rssi);
+        
+        Serial.println("Clearing interrupts");
+        Radio::clearInterrupts();
+
         return true;
       }
       else
@@ -968,6 +982,8 @@ namespace RFLink
         RawSignal.Pulses[RawSignal.Number] = 20000;  // Last element contains the timeout.
         RawSignal.Multiply = params::sample_rate;
         RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits)
+
+        Radio::clearInterrupts();
 
         return true;
       }
