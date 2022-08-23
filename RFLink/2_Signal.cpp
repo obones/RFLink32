@@ -29,6 +29,7 @@ namespace RFLink
   {
 
     RawSignalStruct RawSignal = {0, 0, 0, 0, 0UL, false, -9999.0F, EndReasons::Unknown}; // current message
+    volatile bool CarrierSenseAsserted = false;
 
     #define SLICER_DEFAULT_RFM69 Slicer_enum::Legacy
     #define SLICER_DEFAULT_CC1101 Slicer_enum::Legacy
@@ -291,6 +292,7 @@ namespace RFLink
     {
       // *********************************************************************************
       static bool Toggle;
+      static bool previousCSState = false;
       static unsigned long timeStartSeek_ms;
       static unsigned long timeStartLoop_us;
       static unsigned int RawCodeLength;
@@ -305,6 +307,7 @@ namespace RFLink
 #define GET_PULSELENGTH PulseLength_us = micros() - timeStartLoop_us
 #define SWITCH_TOGGLE Toggle = !Toggle
 #define STORE_PULSE RawSignal.Pulses[RawCodeLength++] = PulseLength_us / params::sample_rate;
+#define CHECK_CS if (CarrierSenseAsserted ^ previousCSState) { previousCSState = CarrierSenseAsserted; if (CarrierSenseAsserted) Serial.println("Carrier is asserted"); else Serial.println("Carrier is no longer asserted"); }
 
       // ***   Init Vars   ***
       Toggle = true;
@@ -320,11 +323,11 @@ namespace RFLink
       while (PulseLength_us < params::min_preamble)
       {
         while (CHECK_RF && CHECK_TIMEOUT)
-          ;
+          CHECK_CS;
         RESET_TIMESTART;
         SWITCH_TOGGLE;
         while (CHECK_RF && CHECK_TIMEOUT)
-          ;
+          CHECK_CS;
         GET_PULSELENGTH;
         SWITCH_TOGGLE;
         if (!CHECK_TIMEOUT)
@@ -345,6 +348,7 @@ namespace RFLink
         while (CHECK_RF)
         {
           GET_PULSELENGTH;
+          CHECK_CS;
           if (PulseLength_us > end_timeout)
             break;
         }
@@ -681,7 +685,6 @@ namespace RFLink
     };
 
     volatile int ISRCount = 0;
-    volatile bool CarrierSenseAsserted = false;
 
 /*    volatile unsigned long CarrierSenseLastPulse_us = 0;
     volatile CarrierSenseMainLoopStatus mainLoopStatus = CarrierSenseMainLoopStatus::Idle;
@@ -717,6 +720,7 @@ namespace RFLink
     {
       // *********************************************************************************
       static bool Toggle;
+      static bool previousCSState = false;
       //static unsigned long timeStartSeek_ms;
       static unsigned long timeStartLoop_us;
       static unsigned int RawCodeLength;
@@ -730,8 +734,10 @@ namespace RFLink
 #define GET_PULSELENGTH PulseLength_us = micros() - timeStartLoop_us
 #define SWITCH_TOGGLE Toggle = !Toggle
 #define STORE_PULSE (RawSignal.Pulses[RawCodeLength++] = PulseLength_us / params::sample_rate)
+#define CHECK_CS if (CarrierSenseAsserted ^ previousCSState) { previousCSState = CarrierSenseAsserted; if (CarrierSenseAsserted) Serial.println("Carrier is asserted"); else Serial.println("Carrier is no longer asserted"); }
 
       // if no carrier sensed, abort early
+      CHECK_CS;
       if (!CarrierSenseAsserted)
         return false;
 
@@ -754,6 +760,7 @@ namespace RFLink
         while (CHECK_RF)
         {
           GET_PULSELENGTH;
+          CHECK_CS;
           if (PulseLength_us > CarrierSense_end_timeout)
             break;
         }
