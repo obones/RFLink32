@@ -283,6 +283,9 @@ namespace RFLink { namespace Radio {
      */
     float getCurrentRssi();
 
+    // Clears interrupt flags on the transceiver
+    void clearInterrupts();
+
     void initializeHardware(HardwareType newHardware, bool force = false);
 
     bool initialize_SX1278();

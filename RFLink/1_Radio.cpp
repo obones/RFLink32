@@ -945,6 +945,32 @@ namespace RFLink { namespace Radio  {
       return -9999.0F;
     }
 
+    void clearInterrupts() {
+      switch (hardware)
+      {
+        case HardwareType::HW_RFM69NEW_t:
+          {
+            Serial.print("Clearing interrupts - radio_RFM69...");
+
+            // Setting the RSSI bit in the REG_IRQ_FLAGS_1 register is not enough...
+            int16_t success = radio_RFM69->standby();
+            if (success != 0)
+              Serial.printf_P(PSTR("Failed to switch to standby mode (code=%i)\r\n"), (int) success);
+            success = radio_RFM69->receiveDirect();
+            if (success != 0)
+              Serial.printf_P(PSTR("Failed to switch to direct receive mode (code=%i)\r\n"), (int) success);
+
+            //radio_RFM69->_mod->SPIwriteRegister(RADIOLIB_RF69_REG_IRQ_FLAGS_1, 0b10000000);
+            //radio_RFM69->clearIRQFlags();
+
+            Serial.println("  OK");
+            break;
+          }
+        default:
+          ;
+      }
+    }
+
     void initializeHardware(HardwareType newHardware, bool force) {
 
       if(newHardware == hardware && !force && hardwareProperlyInitialized) {
@@ -1205,6 +1231,16 @@ namespace RFLink { namespace Radio  {
 
       result = radio_RFM69->setLnaTestBoost(true);
       Serial.printf_P(PSTR("RFM69 setLnaTestBoost()=%i\r\n"), result);
+      finalResult |= result;
+
+      result = radio_RFM69->setDIOMapping(3, RADIOLIB_RF69_DIO3_CONT_RSSI);
+      Serial.printf_P(PSTR("RFM69 setDIOMapping(3, RADIOLIB_RF69_DIO3_CONT_RSSI)=%i\r\n"), result);
+      finalResult |= result;
+
+      //result = radio_RFM69->_mod->SPIsetRegValue(RADIOLIB_RF69_REG_RSSI_THRESH, 150, 7, 0);
+      //Serial.printf_P(PSTR("RFM69 SPIsetRegValue(RADIOLIB_RF69_REG_RSSI_THRESH, 150)=%i\r\n"), result);
+      result = radio_RFM69->setRSSIThreshold(-75.0);
+      Serial.printf_P(PSTR("RFM69 setRSSIThreshold(-75.0)=%i\r\n"), result);
       finalResult |= result;
 
 /*      radio_RFM69->writeRegister(0x02, 0x68);
