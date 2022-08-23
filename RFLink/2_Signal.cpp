@@ -251,37 +251,58 @@ namespace RFLink
       }
     }
 
+    /*static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
+    {
+        return false;
+    }*/
+
     void setupReception()
     {
       pinMode(Radio::pins::RX_NA, INPUT);
 
-      if (Signal::runtime::appliedSlicer == Signal::Slicer_enum::Carrier_Sense_RMT)
+      switch (Signal::runtime::appliedSlicer)
       {
-        rmt_config_t rmt_rx;
+        case Signal::Slicer_enum::Legacy:  // TODO: move me to the "nothing to do part"
+        case Signal::Slicer_enum::Carrier_Sense:
+          //::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &dataISR, CHANGE);
+          Serial.println("Installing carrierSenseISR");
+          ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseISR, CHANGE);
+          break;
+        case Signal::Slicer_enum::Carrier_Sense_RMT:
+          {
+            rmt_config_t rmt_rx;
 
-        rmt_rx.channel = RMT_CHANNEL;
-        rmt_rx.gpio_num = (gpio_num_t)Radio::pins::RX_DATA;
-        rmt_rx.clk_div = 80; // 80MHz / 80 = 1 MHz, 1 us - we  take samples every 1 microseconds
-        rmt_rx.mem_block_num = 8;
-        rmt_rx.rmt_mode = RMT_MODE_RX;
+            rmt_rx.channel = RMT_CHANNEL;
+            rmt_rx.gpio_num = (gpio_num_t)Radio::pins::RX_DATA;
+            rmt_rx.clk_div = 80; // 80MHz / 80 = 1 MHz, 1 us - we  take samples every 1 microseconds
+            rmt_rx.mem_block_num = 8;
+            rmt_rx.rmt_mode = RMT_MODE_RX;
 
-        rmt_rx.rx_config.idle_threshold = RMT_IDLE_THRESHOLD;
-        rmt_rx.rx_config.filter_en = true;
-        rmt_rx.rx_config.filter_ticks_thresh = 100;  // Counted in source clock, not divided counter clock
+            rmt_rx.rx_config.idle_threshold = RMT_IDLE_THRESHOLD;
+            rmt_rx.rx_config.filter_en = true;
+            rmt_rx.rx_config.filter_ticks_thresh = 100;  // Counted in source clock, not divided counter clock
 
-        Serial.println("Configuring RMT");
-        rmt_check(rmt_config(&rmt_rx), "config");
-        Serial.println("Installing RMT driver");
-        rmt_check(rmt_driver_install(rmt_rx.channel, RMT_IDLE_THRESHOLD / 10 * sizeof(rmt_data_t), 0), "driver_install");  // the longer the idle threshold, the bigger the buffer must be, division by 10 is empiric
+            Serial.println("Configuring RMT");
+            rmt_check(rmt_config(&rmt_rx), "config");
 
-        rmt_check(rmt_get_ringbuf_handle(RMT_CHANNEL, &rmtRingBuffer), "rmt_get_ringbuf_handle");
+            /*Serial.println("Installing RMT receive callback");
+            rmt_rx_event_callbacks_t cbs = {
+                .on_recv_done = rmt_rx_done_callback
+            };
+            rmt_rx_register_event_callbacks((rmt_channel_handle_t)(rmt_rx.channel), &cbs, nullptr);*/
 
-        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseRMT_ISR, CHANGE);
-      }
-      else
-      {
-        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_DATA), &dataISR, CHANGE);
-        ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseISR, CHANGE);
+            Serial.println("Installing RMT driver");
+            rmt_check(rmt_driver_install(rmt_rx.channel, RMT_IDLE_THRESHOLD / 10 * sizeof(rmt_data_t), 0), "driver_install");  // the longer the idle threshold, the bigger the buffer must be, division by 10 is empiric
+
+            rmt_check(rmt_get_ringbuf_handle(RMT_CHANNEL, &rmtRingBuffer), "rmt_get_ringbuf_handle");
+
+            ::attachInterrupt(digitalPinToInterrupt(Radio::pins::RX_NA), &carrierSenseRMT_ISR, CHANGE);
+          }
+          break;
+        case Signal::Slicer_enum::Default:
+        case Signal::Slicer_enum::RSSI_Advanced:
+        case Signal::Slicer_enum::SLICERS_EOF:
+          ; // nothing to do
       }
 
       if (params::async_mode_enabled)
