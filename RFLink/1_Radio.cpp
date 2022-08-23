@@ -799,8 +799,7 @@ namespace RFLink { namespace Radio  {
         switch (new_State)
         {
           case Radio_OFF: {
-            if( RFLink::Signal::params::async_mode_enabled )
-              RFLink::Signal::AsyncSignalScanner::stopScanning();
+            Signal::setupIdle();
 
             auto success = radio_RFM69->standby();
             if(success != 0 ){
@@ -826,8 +825,7 @@ namespace RFLink { namespace Radio  {
 
             setPinMode(pins::RX_DATA, INPUT);
 
-            if( RFLink::Signal::params::async_mode_enabled )
-              RFLink::Signal::AsyncSignalScanner::startScanning();
+            RFLink::Signal::setupReception();
 
             break;
           }
