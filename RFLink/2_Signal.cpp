@@ -922,11 +922,13 @@ namespace RFLink
     boolean FetchSignal_carrier_sense_rmt()
     {
       static bool previousCSState = false;
+      static int noItemsCount = 0;
 
       if (!previousCSState)
       {
         RawSignal.Pulses = RawSignal.RawPulses;
         RawSignal.Number = 0;
+        noItemsCount = 0;
       }
 
       /*if (!receiving && RawSignal.readyForDecoder)
@@ -983,6 +985,10 @@ namespace RFLink
           // return items to the ring buffer
           vRingbufferReturnItem(rmtRingBuffer, (void*) items);
         }
+        else
+        {
+          noItemsCount++;
+        }
 
         // done processing, indicate that we are ready for next packet
         //RawSignal.readyForDecoder = false;
@@ -998,8 +1004,10 @@ namespace RFLink
       }
 
       // Data has been received and carrier is no longer sensed? Signal is over
-      if (RawSignal.Number > 0 && !CarrierSenseAsserted)
+      if (RawSignal.Number > 0 && (!CarrierSenseAsserted || (noItemsCount > 10)))
       {
+        Serial.printf("noItemsCount = %d\r\n", noItemsCount);
+
         RawSignal.Pulses[RawSignal.Number] = 20000;  // Last element contains the timeout.
         RawSignal.Multiply = params::sample_rate;
         RawSignal.Time = millis(); // Time the RF packet was received (to keep track of retransmits)
