@@ -223,7 +223,7 @@ namespace RFLink
     void IRAM_ATTR carrierSenseRMT_ISR();
     void IRAM_ATTR dataISR();
 
-    RingbufHandle_t rmtRingBuffer;
+    RingbufHandle_t rmtRingBuffer = NULL;
 
     void rmt_check(esp_err_t errorCode, const char* origin)
     {
@@ -246,6 +246,7 @@ namespace RFLink
         rmt_check(rmt_rx_stop(RMT_CHANNEL), "stop");
         Serial.println("Uninstalling RMT driver");
         rmt_check(rmt_driver_uninstall(RMT_CHANNEL), "uninstall");
+        rmtRingBuffer = NULL;
       }
     }
 
@@ -900,6 +901,7 @@ namespace RFLink
         rmt_get_ringbuf_handle(RMT_CHANNEL, &rb);
         */
       //if (previousCSState || CarrierSenseAsserted)
+      if (rmtRingBuffer)
       {
         size_t rx_size = 0;
         rmt_item32_t* items = NULL;
