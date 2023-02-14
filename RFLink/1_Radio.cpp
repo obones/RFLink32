@@ -948,7 +948,8 @@ namespace RFLink { namespace Radio  {
     void clearInterrupts() {
       switch (hardware)
       {
-        case HardwareType::HW_RFM69NEW_t:
+        case HardwareType::HW_RFM69CW_t:
+        case HardwareType::HW_RFM69HCW_t:
           {
             Serial.print("Clearing interrupts - radio_RFM69...");
 
