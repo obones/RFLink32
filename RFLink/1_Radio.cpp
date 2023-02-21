@@ -359,7 +359,15 @@ namespace RFLink { namespace Radio  {
       }
       else {
         value = item->getLongIntValue();
-        if (value < 0 || value > 812000 ) {
+
+        long maxValue = 500000;
+        switch (newHardwareId)
+        {
+          case HardwareType::HW_CC1101_t:
+            maxValue = 812000;
+        }
+
+        if (value < 0 || value > maxValue ) {
           Serial.println(F("Invalid rxBandwidth provided, resetting to default value"));
           if(item->canBeNull) {
             item->deleteJsonRecord();
